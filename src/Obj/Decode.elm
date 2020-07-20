@@ -49,28 +49,30 @@ type Decoder a
 
 
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
-decodeString =
-    Debug.todo "Implement decodeString"
+decodeString units (Decoder decode) content =
+    content
+        |> parse units
+        |> Result.andThen decode
 
 
 triangles : List Filter -> Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
-triangles =
-    Debug.todo "Implement triangles"
+triangles filters =
+    fail "Implement triangles"
 
 
 faces : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
-faces =
-    Debug.todo "Implement faces"
+faces filters =
+    fail "Implement faces"
 
 
 texturedTriangles : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
-texturedTriangles =
-    Debug.todo "Implement texturedTriangles"
+texturedTriangles filters =
+    fail "Implement texturedTriangles"
 
 
 texturedFaces : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
-texturedFaces =
-    Debug.todo "Implement texturedFaces"
+texturedFaces filters =
+    fail "Implement texturedFaces"
 
 
 type Filter
@@ -132,6 +134,160 @@ succeed mesh =
 fail : String -> Decoder a
 fail error =
     Decoder (\_ -> Result.Err error)
+
+
+
+-- Internals
+
+
+type PropertyType
+    = GroupsProperty (List String)
+    | ObjectProperty String
+    | MaterialProperty String
+
+
+type Line
+    = Property PropertyType
+    | PositionData (Point3d Meters ObjCoordinates)
+    | NormalData (Vector3d Unitless ObjCoordinates)
+    | UvData ( Float, Float )
+    | FaceIndices String
+    | Skip
+
+
+parse : (Float -> Length) -> String -> Result String ParsedFile
+parse units content =
+    parseHelp units (String.lines content) [] [] [] [] Nothing Nothing [] []
+
+
+parseHelp :
+    (Float -> Length)
+    -> List String
+    -> List (Point3d Meters ObjCoordinates)
+    -> List (Vector3d Unitless ObjCoordinates)
+    -> List ( Float, Float )
+    -> List ( GroupProperties, List String )
+    -> Maybe String
+    -> Maybe String
+    -> List String
+    -> List String
+    -> Result String ParsedFile
+parseHelp units lines positions normals uvs faces_ object_ material_ groups indices =
+    case lines of
+        [] ->
+            Result.Ok
+                { positions = Array.fromList (List.reverse positions)
+                , normals = Array.fromList (List.reverse normals)
+                , uvs = Array.fromList (List.reverse uvs)
+                , faces =
+                    if indices == [] then
+                        faces_
+
+                    else
+                        -- flush the last group of face indices
+                        ( { groups = groups, object = object_, material = material_ }, indices ) :: faces_
+                }
+
+        line :: remainingLines ->
+            case parseLine units line of
+                Ok (Property propertyType) ->
+                    let
+                        newFaces =
+                            if indices == [] then
+                                faces_
+
+                            else
+                                ( { groups = groups, object = object_, material = material_ }, indices ) :: faces_
+                    in
+                    case propertyType of
+                        GroupsProperty newGroups ->
+                            parseHelp units remainingLines positions normals uvs newFaces object_ material_ newGroups []
+
+                        ObjectProperty newObject ->
+                            parseHelp units remainingLines positions normals uvs newFaces (Just newObject) material_ groups []
+
+                        MaterialProperty newMaterial ->
+                            parseHelp units remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups []
+
+                Ok (PositionData position) ->
+                    parseHelp units remainingLines (position :: positions) normals uvs faces_ object_ material_ groups indices
+
+                Ok (NormalData normal) ->
+                    parseHelp units remainingLines positions (normal :: normals) uvs faces_ object_ material_ groups indices
+
+                Ok (UvData uv) ->
+                    parseHelp units remainingLines positions normals (uv :: uvs) faces_ object_ material_ groups indices
+
+                Ok (FaceIndices faceIndices) ->
+                    parseHelp units remainingLines positions normals uvs faces_ object_ material_ groups (faceIndices :: indices)
+
+                Ok Skip ->
+                    parseHelp units remainingLines positions normals uvs faces_ object_ material_ groups indices
+
+                Err error ->
+                    Err error
+
+
+parseLine : (Float -> Length) -> String -> Result String Line
+parseLine units line =
+    if String.startsWith "o " line then
+        case String.trim (String.dropLeft 2 line) of
+            "" ->
+                Result.Err "Expect object name"
+
+            object_ ->
+                Result.Ok (Property (ObjectProperty object_))
+
+    else if String.startsWith "g " line then
+        case String.words (String.dropLeft 2 line) of
+            [] ->
+                Result.Err "Expect group name"
+
+            groups ->
+                Result.Ok (Property (GroupsProperty groups))
+
+    else if String.startsWith "usemtl " line then
+        case String.trim (String.dropLeft 7 line) of
+            "" ->
+                Result.Err "Expect material name"
+
+            material_ ->
+                Result.Ok (Property (MaterialProperty material_))
+
+    else if String.startsWith "v " line then
+        case List.map String.toFloat (String.words (String.dropLeft 2 line)) of
+            [ Just x, Just y, Just z ] ->
+                Result.Ok (PositionData (Point3d.xyz (units x) (units y) (units z)))
+
+            _ ->
+                Err "Invalid position data"
+
+    else if String.startsWith "vt " line then
+        case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
+            [ Just x, Just y ] ->
+                Result.Ok (UvData ( x, y ))
+
+            _ ->
+                Err "Invalid uv data"
+
+    else if String.startsWith "vn " line then
+        case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
+            [ Just x, Just y, Just z ] ->
+                Result.Ok (NormalData (Vector3d.unitless x y z))
+
+            _ ->
+                Err "Invalid normal data"
+
+    else if String.startsWith "f " line then
+        case String.dropLeft 2 line of
+            "" ->
+                Result.Err "Expect face indices"
+
+            faceIndices ->
+                Result.Ok (FaceIndices faceIndices)
+
+    else
+        Ok Skip
 
 
 
