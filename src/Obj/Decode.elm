@@ -52,6 +52,7 @@ decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
     content
         |> parse units
+        |> Debug.log ""
         |> Result.andThen decode
 
 
@@ -152,6 +153,7 @@ type Line
     | NormalData (Vector3d Unitless ObjCoordinates)
     | UvData ( Float, Float )
     | FaceIndices String
+    | Error String
     | Skip
 
 
@@ -190,7 +192,7 @@ parseHelp units lines positions normals uvs faces_ object_ material_ groups indi
 
         line :: remainingLines ->
             case parseLine units line of
-                Ok (Property propertyType) ->
+                Property propertyType ->
                     let
                         newFaces =
                             if indices == [] then
@@ -209,85 +211,85 @@ parseHelp units lines positions normals uvs faces_ object_ material_ groups indi
                         MaterialProperty newMaterial ->
                             parseHelp units remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups []
 
-                Ok (PositionData position) ->
+                PositionData position ->
                     parseHelp units remainingLines (position :: positions) normals uvs faces_ object_ material_ groups indices
 
-                Ok (NormalData normal) ->
+                NormalData normal ->
                     parseHelp units remainingLines positions (normal :: normals) uvs faces_ object_ material_ groups indices
 
-                Ok (UvData uv) ->
+                UvData uv ->
                     parseHelp units remainingLines positions normals (uv :: uvs) faces_ object_ material_ groups indices
 
-                Ok (FaceIndices faceIndices) ->
+                FaceIndices faceIndices ->
                     parseHelp units remainingLines positions normals uvs faces_ object_ material_ groups (faceIndices :: indices)
 
-                Ok Skip ->
+                Skip ->
                     parseHelp units remainingLines positions normals uvs faces_ object_ material_ groups indices
 
-                Err error ->
+                Error error ->
                     Err error
 
 
-parseLine : (Float -> Length) -> String -> Result String Line
+parseLine : (Float -> Length) -> String -> Line
 parseLine units line =
     if String.startsWith "o " line then
         case String.trim (String.dropLeft 2 line) of
             "" ->
-                Result.Err "Expect object name"
+                Error "Expect object name"
 
             object_ ->
-                Result.Ok (Property (ObjectProperty object_))
+                Property (ObjectProperty object_)
 
     else if String.startsWith "g " line then
         case String.words (String.dropLeft 2 line) of
             [] ->
-                Result.Err "Expect group name"
+                Error "Expect group name"
 
             groups ->
-                Result.Ok (Property (GroupsProperty groups))
+                Property (GroupsProperty groups)
 
     else if String.startsWith "usemtl " line then
         case String.trim (String.dropLeft 7 line) of
             "" ->
-                Result.Err "Expect material name"
+                Error "Expect material name"
 
             material_ ->
-                Result.Ok (Property (MaterialProperty material_))
+                Property (MaterialProperty material_)
 
     else if String.startsWith "v " line then
         case List.map String.toFloat (String.words (String.dropLeft 2 line)) of
             [ Just x, Just y, Just z ] ->
-                Result.Ok (PositionData (Point3d.xyz (units x) (units y) (units z)))
+                PositionData (Point3d.xyz (units x) (units y) (units z))
 
             _ ->
-                Err "Invalid position data"
+                Error "Invalid position data"
 
     else if String.startsWith "vt " line then
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
             [ Just x, Just y ] ->
-                Result.Ok (UvData ( x, y ))
+                UvData ( x, y )
 
             _ ->
-                Err "Invalid uv data"
+                Error "Invalid uv data"
 
     else if String.startsWith "vn " line then
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
             [ Just x, Just y, Just z ] ->
-                Result.Ok (NormalData (Vector3d.unitless x y z))
+                NormalData (Vector3d.unitless x y z)
 
             _ ->
-                Err "Invalid normal data"
+                Error "Invalid normal data"
 
     else if String.startsWith "f " line then
         case String.dropLeft 2 line of
             "" ->
-                Result.Err "Expect face indices"
+                Error "Expect face indices"
 
             faceIndices ->
-                Result.Ok (FaceIndices faceIndices)
+                FaceIndices faceIndices
 
     else
-        Ok Skip
+        Skip
 
 
 
