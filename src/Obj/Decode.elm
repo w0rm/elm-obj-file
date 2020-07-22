@@ -157,7 +157,7 @@ type Line
 
 parse : (Float -> Length) -> String -> Result String ParsedFile
 parse units content =
-    parseHelp units (String.lines content) [] [] [] [] Nothing Nothing [] []
+    parseHelp units (String.lines content) [] [] [] [] Nothing Nothing [ "default" ] []
 
 
 parseHelp :
