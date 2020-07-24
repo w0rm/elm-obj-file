@@ -5,6 +5,7 @@ import Axis3d
 import Browser
 import Camera3d
 import Color exposing (Color)
+import Direction3d
 import Html exposing (Html)
 import Length
 import Meshes.Pod
@@ -70,12 +71,26 @@ view model =
             Html.text "Loading…"
 
         Just texture ->
-            Scene3d.unlit
-                { camera = camera
-                , dimensions = ( Pixels.int 400, Pixels.int 400 )
+            Scene3d.sunny
+                { upDirection = Direction3d.z
+                , sunlightDirection = Direction3d.negativeZ
+                , shadows = False
+                , camera = camera
+                , dimensions = ( Pixels.int 640, Pixels.int 640 )
                 , background = Scene3d.transparentBackground
                 , clipDepth = Length.meters 0.1
-                , entities = [ Scene3d.rotateAround Axis3d.x (Angle.degrees 90) (Scene3d.mesh (Scene3d.Material.texturedColor texture) mesh) ]
+                , entities =
+                    [ Scene3d.rotateAround Axis3d.x
+                        (Angle.degrees 90)
+                        (Scene3d.mesh
+                            (Scene3d.Material.texturedNonmetal
+                                { baseColor = texture
+                                , roughness = Scene3d.Material.constant 1
+                                }
+                            )
+                            mesh
+                        )
+                    ]
                 }
 
 
