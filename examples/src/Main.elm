@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Angle
+import Axis3d
 import Browser
 import Camera3d
 import Color exposing (Color)
@@ -56,10 +57,10 @@ view model =
             Camera3d.perspective
                 { viewpoint =
                     Viewpoint3d.orbitZ
-                        { focalPoint = Point3d.meters 0.5 0.5 0
-                        , azimuth = Angle.degrees 20
-                        , elevation = Angle.degrees 60
-                        , distance = Length.meters 3
+                        { focalPoint = Point3d.meters 0 0 0
+                        , azimuth = Angle.degrees -45
+                        , elevation = Angle.degrees 35
+                        , distance = Length.meters 16
                         }
                 , verticalFieldOfView = Angle.degrees 30
                 }
@@ -74,7 +75,7 @@ view model =
                 , dimensions = ( Pixels.int 400, Pixels.int 400 )
                 , background = Scene3d.transparentBackground
                 , clipDepth = Length.meters 0.1
-                , entities = [ Scene3d.mesh (Scene3d.Material.texturedColor texture) mesh ]
+                , entities = [ Scene3d.rotateAround Axis3d.x (Angle.degrees 90) (Scene3d.mesh (Scene3d.Material.texturedColor texture) mesh) ]
                 }
 
 

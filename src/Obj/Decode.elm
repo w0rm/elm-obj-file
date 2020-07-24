@@ -40,7 +40,7 @@ type alias ParsedFile =
     { positions : Array (Point3d Meters ObjCoordinates)
     , normals : Array (Vector3d Unitless ObjCoordinates)
     , uvs : Array ( Float, Float )
-    , faces : List ( GroupProperties, List String ) -- f 72/1/1 49/2/1 8/3/1 19/4/1
+    , faces : List ( GroupProperties, List (List (List (Maybe Int))) )
     }
 
 
@@ -52,7 +52,6 @@ decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
     content
         |> parse units
-        |> Debug.log ""
         |> Result.andThen decode
 
 
@@ -73,7 +72,93 @@ texturedTriangles filters =
 
 texturedFaces : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
 texturedFaces filters =
-    fail "Implement texturedFaces"
+    Decoder
+        (\parsedFile ->
+            case List.filter (Tuple.first >> matches filters) parsedFile.faces of
+                [] ->
+                    Err "Not found"
+
+                filteredFaces ->
+                    collectTexturedFaces parsedFile filteredFaces []
+        )
+
+
+type alias TexturedFace =
+    { position : Point3d Meters ObjCoordinates
+    , normal : Vector3d Unitless ObjCoordinates
+    , uv : ( Float, Float )
+    }
+
+
+collectTexturedFaces : ParsedFile -> List ( GroupProperties, List (List (List (Maybe Int))) ) -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (TriangularMesh TexturedFace)
+collectTexturedFaces parsedFile groups polygons =
+    case groups of
+        ( _, groupIndices ) :: remainingGroups ->
+            case groupIndices of
+                (first :: indices) :: remainingGroupIndices ->
+                    case addTexturedFacesPolygons parsedFile first indices remainingGroupIndices polygons of
+                        Ok newPolygons ->
+                            collectTexturedFaces parsedFile remainingGroups newPolygons
+
+                        Err error ->
+                            Err error
+
+                _ ->
+                    Err "Empty number of indices in a group"
+
+        [] ->
+            Ok (TriangularMesh.triangles polygons)
+
+
+addTexturedFacesPolygons : ParsedFile -> List (Maybe Int) -> List (List (Maybe Int)) -> List (List (List (Maybe Int))) -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (List ( TexturedFace, TexturedFace, TexturedFace ))
+addTexturedFacesPolygons parsedFile firstVertex vertices groupIndices polygons =
+    case vertices of
+        _ :: [] ->
+            case groupIndices of
+                [] ->
+                    Ok polygons
+
+                (first :: indices) :: remainingGroupIndices ->
+                    addTexturedFacesPolygons parsedFile first indices remainingGroupIndices polygons
+
+                _ ->
+                    Err "Missing indices"
+
+        [ Just p2, Just uv2, Just n2 ] :: remainingVertices ->
+            case remainingVertices of
+                [ Just p3, Just uv3, Just n3 ] :: _ ->
+                    case firstVertex of
+                        [ Just p1, Just uv1, Just n1 ] ->
+                            let
+                                maybeV1 =
+                                    Maybe.map3 TexturedFace (Array.get (p1 - 1) parsedFile.positions) (Array.get (n1 - 1) parsedFile.normals) (Array.get (uv1 - 1) parsedFile.uvs)
+
+                                maybeV2 =
+                                    Maybe.map3 TexturedFace (Array.get (p2 - 1) parsedFile.positions) (Array.get (n2 - 1) parsedFile.normals) (Array.get (uv2 - 1) parsedFile.uvs)
+
+                                maybeV3 =
+                                    Maybe.map3 TexturedFace (Array.get (p3 - 1) parsedFile.positions) (Array.get (n3 - 1) parsedFile.normals) (Array.get (uv3 - 1) parsedFile.uvs)
+                            in
+                            case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
+                                Just triangle ->
+                                    addTexturedFacesPolygons
+                                        parsedFile
+                                        firstVertex
+                                        remainingVertices
+                                        groupIndices
+                                        (triangle :: polygons)
+
+                                Nothing ->
+                                    Err "Missing indices"
+
+                        _ ->
+                            Err "Missing indices"
+
+                _ ->
+                    Err "Missing indices"
+
+        _ ->
+            Err "Missing indices"
 
 
 type Filter
@@ -152,7 +237,7 @@ type Line
     | PositionData (Point3d Meters ObjCoordinates)
     | NormalData (Vector3d Unitless ObjCoordinates)
     | UvData ( Float, Float )
-    | FaceIndices String
+    | FaceIndices (List (List (Maybe Int)))
     | Error String
     | Skip
 
@@ -168,11 +253,11 @@ parseHelp :
     -> List (Point3d Meters ObjCoordinates)
     -> List (Vector3d Unitless ObjCoordinates)
     -> List ( Float, Float )
-    -> List ( GroupProperties, List String )
+    -> List ( GroupProperties, List (List (List (Maybe Int))) )
     -> Maybe String
     -> Maybe String
     -> List String
-    -> List String
+    -> List (List (List (Maybe Int)))
     -> Result String ParsedFile
 parseHelp units lines positions normals uvs faces_ object_ material_ groups indices =
     case lines of
@@ -281,34 +366,29 @@ parseLine units line =
                 Error "Invalid normal data"
 
     else if String.startsWith "f " line then
-        case String.dropLeft 2 line of
-            "" ->
+        case String.words (String.dropLeft 2 line) of
+            [] ->
                 Error "Expect face indices"
 
             faceIndices ->
-                FaceIndices faceIndices
+                FaceIndices (List.map (String.split "/" >> List.map String.toInt) faceIndices)
 
     else
         Skip
 
 
+matches : List Filter -> GroupProperties -> Bool
+matches filters properties =
+    List.all
+        (\filter ->
+            case filter of
+                Group group_ ->
+                    List.member group_ properties.groups
 
-{-
-   { nextIndex : Int
-   , mapping : Array Int
-   , vertices : List (Point3d Meters ObjCoordinates) -- Array.fromList (List.reverse)
-   , faceIndices : List (Int, Int, Int)
-   }
+                Object object_ ->
+                    properties.object == Just object_
 
-   filterFile : (ParsedFile -> String -> Result String a) -> ParsedFile -> List Filter -> Result String (List a)
-
-   let
-       decoder =
-           Obj.map2 Tuple.pair
-               (Obj.faces [Obj.group "Gun", Obj.material "Plastic"])
-               (Obj.triangles [Obj.group "Wheel"])
-   in
-   Obj.decode Length.centimeters decoder objFileContents
-
-   Obj.decode Length.centimeters (Obj.faces []) objFileContents
--}
+                Material material_ ->
+                    properties.material == Just material_
+        )
+        filters
