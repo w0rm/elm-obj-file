@@ -38,7 +38,7 @@ module Obj.Decode exposing
 
 # Advanced Decoding
 
-@docs oneOf, fail, succeed, andThen, combine
+@docs filter, oneOf, fail, succeed, andThen, combine
 
 -}
 
@@ -125,29 +125,15 @@ Like the car base and car wheels.
 
 -}
 object : String -> Decoder a -> Decoder a
-object name (Decoder decoder) =
-    Decoder
-        (\vertexData elements ->
-            decoder vertexData
-                (List.filter
-                    (\( properties, _ ) -> properties.material == Just name)
-                    elements
-                )
-        )
+object name =
+    filter (\properties -> properties.object == Just name)
 
 
 {-| Decode the data for the certain group.
 -}
 group : String -> Decoder a -> Decoder a
-group name (Decoder decoder) =
-    Decoder
-        (\vertexData elements ->
-            decoder vertexData
-                (List.filter
-                    (\( properties, _ ) -> List.member name properties.groups)
-                    elements
-                )
-        )
+group name =
+    filter (\properties -> List.member name properties.groups)
 
 
 {-| Decode the default group. This group has a special meaning,
@@ -165,15 +151,8 @@ defaultGroup =
 {-| Decode the material.
 -}
 material : String -> Decoder a -> Decoder a
-material name (Decoder decoder) =
-    Decoder
-        (\vertexData elements ->
-            decoder vertexData
-                (List.filter
-                    (\( properties, _ ) -> properties.material == Just name)
-                    elements
-                )
-        )
+material name =
+    filter (\properties -> properties.material == Just name)
 
 
 
@@ -283,6 +262,27 @@ map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decode
 
 
 -- ADVANCED DECODING
+
+
+{-| Filter what should be decoded. For example, to implement the `group` decoder:
+
+    group name =
+        filter (\properties -> List.member name properties.groups)
+
+-}
+filter :
+    ({ groups : List String, object : Maybe String, material : Maybe String } -> Bool)
+    -> Decoder a
+    -> Decoder a
+filter fn (Decoder decoder) =
+    Decoder
+        (\vertexData elements ->
+            decoder vertexData
+                (List.filter
+                    (\( properties, _ ) -> fn properties)
+                    elements
+                )
+        )
 
 
 {-| Try a bunch of different decoders. You will get the result from the first one that succeeds.
