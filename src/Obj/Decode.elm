@@ -64,28 +64,14 @@ type Decoder a
 -}
 triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
 triangles =
-    Decoder
-        (\vertexData elements ->
-            if elements == [] then
-                Err "Not found"
-
-            else
-                collectTriangles (collectTriangle vertexData) elements []
-        )
+    Decoder (\vertexData elements -> collectTriangles (collectTriangle vertexData) elements [])
 
 
 {-| Decode positions and normals. Use with `Scene3d.Mesh.indexedFaces`.
 -}
 faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
 faces =
-    Decoder
-        (\vertexData elements ->
-            if elements == [] then
-                Err "Not found"
-
-            else
-                collectTriangles (collectFace vertexData) elements []
-        )
+    Decoder (\vertexData elements -> collectTriangles (collectFace vertexData) elements [])
 
 
 {-| Decode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
@@ -93,28 +79,14 @@ Use with `Scene3d.Mesh.texturedTriangles` or `Scene3d.Mesh.texturedFacets`.
 -}
 texturedTriangles : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
 texturedTriangles =
-    Decoder
-        (\vertexData elements ->
-            if elements == [] then
-                Err "Not found"
-
-            else
-                collectTriangles (collectTexturedTriangle vertexData) elements []
-        )
+    Decoder (\vertexData elements -> collectTriangles (collectTexturedTriangle vertexData) elements [])
 
 
 {-| Decode positions, UV and normals. Use with `Scene3d.Mesh.texturedFaces`.
 -}
 texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
 texturedFaces =
-    Decoder
-        (\vertexData elements ->
-            if elements == [] then
-                Err "Not found"
-
-            else
-                collectTriangles (collectTexturedFace vertexData) elements []
-        )
+    Decoder (\vertexData elements -> collectTriangles (collectTexturedFace vertexData) elements [])
 
 
 
@@ -484,7 +456,11 @@ collectTriangles collect elements polygons =
                     Err "Empty number of indices in a group"
 
         [] ->
-            Ok (TriangularMesh.triangles polygons)
+            if polygons == [] then
+                Err "Not found"
+
+            else
+                Ok (TriangularMesh.triangles polygons)
 
 
 {-| Defines a function that knows how to collect a certain kind of triangle
@@ -707,7 +683,7 @@ decodeHelp units decode lines positions normals uvs elements object_ material_ g
 
                  else
                     -- flush the last group of face indices
-                    ( { groups = groups_, object = object_, material = material_ }, indices ) :: elements
+                    ( GroupProperties groups_ object_ material_, indices ) :: elements
                 )
 
         line :: remainingLines ->
@@ -719,7 +695,7 @@ decodeHelp units decode lines positions normals uvs elements object_ material_ g
                                 elements
 
                             else
-                                ( { groups = groups_, object = object_, material = material_ }, indices ) :: elements
+                                ( GroupProperties groups_ object_ material_, indices ) :: elements
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
