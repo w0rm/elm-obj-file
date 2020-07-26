@@ -1,7 +1,8 @@
 module Obj.Decode exposing
     ( Decoder, triangles, faces, texturedTriangles, texturedFaces
-    , Filter, object, group, defaultGroup, material
     , decodeString
+    , Filter, object, group, defaultGroup, material
+    , objects, groups, materials
     , map, map2, map3, map4, map5
     , oneOf, fail, succeed
     , ObjCoordinates
@@ -15,14 +16,19 @@ module Obj.Decode exposing
 @docs Decoder, triangles, faces, texturedTriangles, texturedFaces
 
 
+# Run Decoders
+
+@docs decodeString
+
+
 # Filtering
 
 @docs Filter, object, group, defaultGroup, material
 
 
-# Run Decoders
+# Metadata
 
-@docs decodeString
+@docs objects, groups, materials
 
 
 # Mapping
@@ -40,6 +46,7 @@ import Array exposing (Array)
 import Length exposing (Length, Meters)
 import Point3d exposing (Point3d)
 import Quantity exposing (Unitless)
+import Set
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
 
@@ -48,44 +55,55 @@ import Vector3d exposing (Vector3d)
 [the OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
 -}
 type Decoder a
-    = Decoder (ParsedFile -> Result String a)
+    = Decoder (VertexData -> Elements -> Result String a)
 
 
 {-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFaces` from elm-3d-scene.
 -}
-triangles : List Filter -> Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
-triangles filters =
+triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
+triangles =
     fail "Implement triangles"
 
 
 {-| Decode positions and normals. Use with `Scene3d.Mesh.indexedFaces`.
 -}
-faces : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
-faces filters =
+faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
+faces =
     fail "Implement faces"
 
 
 {-| Decode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
 Use with `Scene3d.Mesh.texturedTriangles` or `Scene3d.Mesh.texturedFacets`.
 -}
-texturedTriangles : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
-texturedTriangles filters =
+texturedTriangles : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
+texturedTriangles =
     fail "Implement texturedTriangles"
 
 
 {-| Decode positions, UV and normals. Use with `Scene3d.Mesh.texturedFaces`.
 -}
-texturedFaces : List Filter -> Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
-texturedFaces filters =
+texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
+texturedFaces =
     Decoder
-        (\parsedFile ->
-            case List.filter (Tuple.first >> matches filters) parsedFile.faces of
-                [] ->
-                    Err "Not found"
+        (\vertexData elements ->
+            if elements == [] then
+                Err "Not found"
 
-                filteredFaces ->
-                    collectTexturedFaces parsedFile filteredFaces []
+            else
+                collectTexturedFaces vertexData elements []
         )
+
+
+{-| Run the decoder on the string. Takes a function, that knows
+how to convert float coordinates into physical units.
+
+    decodeString Length.centimeters (texturedFaces []) string == Ok (TriangularMesh ...)
+    decodeString Length.centimeters (texturedFaces []) string == Err ...
+
+-}
+decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
+decodeString units (Decoder decode) content =
+    parse units decode content
 
 
 {-| All the primitive decodes take a list of filters. This lets you select only the subset of polygons from the OBJ file.
@@ -130,25 +148,72 @@ material =
     Material
 
 
-{-| Run the decoder on the string. Takes a function, that knows
-how to convert float coordinates into physical units.
-
-    decodeString Length.centimeters (texturedFaces []) string == Ok (TriangularMesh ...)
-    decodeString Length.centimeters (texturedFaces []) string == Err ...
-
+{-| Decode all the objects.
 -}
-decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
-decodeString units (Decoder decode) content =
-    content
-        |> parse units
-        |> Result.andThen decode
+objects : Decoder (List String)
+objects =
+    Decoder
+        (\_ elements ->
+            elements
+                |> List.foldl
+                    (\( groupProperties, _ ) objectsSet ->
+                        case groupProperties.object of
+                            Just obj ->
+                                Set.insert obj objectsSet
+
+                            Nothing ->
+                                objectsSet
+                    )
+                    Set.empty
+                |> Set.toList
+                |> Result.Ok
+        )
+
+
+{-| Decode all the groups.
+-}
+groups : Decoder (List String)
+groups =
+    Decoder
+        (\_ elements ->
+            elements
+                |> List.foldl
+                    (\( groupProperties, _ ) groupsSet ->
+                        List.foldl Set.insert groupsSet groupProperties.groups
+                    )
+                    Set.empty
+                |> Set.toList
+                |> Result.Ok
+        )
+
+
+{-| Decode all the materials.
+-}
+materials : Decoder (List String)
+materials =
+    Decoder
+        (\_ elements ->
+            elements
+                |> List.foldl
+                    (\( groupProperties, _ ) materialsSet ->
+                        case groupProperties.material of
+                            Just obj ->
+                                Set.insert obj materialsSet
+
+                            Nothing ->
+                                materialsSet
+                    )
+                    Set.empty
+                |> Set.toList
+                |> Result.Ok
+        )
 
 
 {-| Transform the decoder. May be useful in case need to post process the mesh data.
 -}
 map : (a -> b) -> Decoder a -> Decoder b
 map fn (Decoder decoder) =
-    Decoder (\parsedFile -> Result.map fn (decoder parsedFile))
+    Decoder (\vertexData elements -> Result.map fn (decoder vertexData elements))
 
 
 {-| Join the result from two decoders. This lets you extract parts of the same OBJ file into separate meshes.
@@ -159,32 +224,32 @@ map fn (Decoder decoder) =
 -}
 map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
 map2 fn (Decoder decoderA) (Decoder decoderB) =
-    Decoder (\parsedFile -> Result.map2 fn (decoderA parsedFile) (decoderB parsedFile))
+    Decoder (\vertexData elements -> Result.map2 fn (decoderA vertexData elements) (decoderB vertexData elements))
 
 
 {-| -}
 map3 : (a -> b -> c -> d) -> Decoder a -> Decoder b -> Decoder c -> Decoder d
 map3 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) =
-    Decoder (\parsedFile -> Result.map3 fn (decoderA parsedFile) (decoderB parsedFile) (decoderC parsedFile))
+    Decoder (\vertexData elements -> Result.map3 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements))
 
 
 {-| -}
 map4 : (a -> b -> c -> d -> e) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e
 map4 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decoderD) =
-    Decoder (\parsedFile -> Result.map4 fn (decoderA parsedFile) (decoderB parsedFile) (decoderC parsedFile) (decoderD parsedFile))
+    Decoder (\vertexData elements -> Result.map4 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements) (decoderD vertexData elements))
 
 
 {-| -}
 map5 : (a -> b -> c -> d -> e -> f) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e -> Decoder f
 map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decoderD) (Decoder decoderE) =
-    Decoder (\parsedFile -> Result.map5 fn (decoderA parsedFile) (decoderB parsedFile) (decoderC parsedFile) (decoderD parsedFile) (decoderE parsedFile))
+    Decoder (\vertexData elements -> Result.map5 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements) (decoderD vertexData elements) (decoderE vertexData elements))
 
 
 {-| Try a bunch of different decoders. You will get the result from the first one that succeeds.
 -}
 oneOf : List (Decoder a) -> Decoder a
 oneOf decoders =
-    Decoder (\parsedFile -> oneOfHelp parsedFile decoders)
+    Decoder (\vertexData elements -> oneOfHelp vertexData elements decoders)
 
 
 {-| A decoder that always succeeds with the result. May be useful in combination with `oneOf` to
@@ -192,7 +257,7 @@ provide a placeholder mesh if decoding fails.
 -}
 succeed : a -> Decoder a
 succeed mesh =
-    Decoder (\_ -> Result.Ok mesh)
+    Decoder (\_ _ -> Result.Ok mesh)
 
 
 {-| A decoder that always fails with a given error message.
@@ -200,7 +265,7 @@ Use it in case you need custom error messages.
 -}
 fail : String -> Decoder a
 fail error =
-    Decoder (\_ -> Result.Err error)
+    Decoder (\_ _ -> Result.Err error)
 
 
 
@@ -225,12 +290,15 @@ type alias GroupProperties =
     }
 
 
-type alias ParsedFile =
+type alias VertexData =
     { positions : Array (Point3d Meters ObjCoordinates)
     , normals : Array (Vector3d Unitless ObjCoordinates)
     , uvs : Array ( Float, Float )
-    , faces : List ( GroupProperties, List (List (List (Maybe Int))) )
     }
+
+
+type alias Elements =
+    List ( GroupProperties, List (List (List (Maybe Int))) )
 
 
 type PropertyType
@@ -249,15 +317,15 @@ type Line
     | Skip
 
 
-collectTexturedFaces : ParsedFile -> List ( GroupProperties, List (List (List (Maybe Int))) ) -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (TriangularMesh TexturedFace)
-collectTexturedFaces parsedFile groups polygons =
-    case groups of
-        ( _, groupIndices ) :: remainingGroups ->
-            case groupIndices of
-                (first :: indices) :: remainingGroupIndices ->
-                    case addTexturedFacesPolygons parsedFile first indices remainingGroupIndices polygons of
+collectTexturedFaces : VertexData -> Elements -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (TriangularMesh TexturedFace)
+collectTexturedFaces vertexData elements polygons =
+    case elements of
+        ( _, elementIndices ) :: remainingElements ->
+            case elementIndices of
+                (first :: indices) :: remainingElementIndices ->
+                    case addTexturedFacesPolygons vertexData first indices remainingElementIndices polygons of
                         Ok newPolygons ->
-                            collectTexturedFaces parsedFile remainingGroups newPolygons
+                            collectTexturedFaces vertexData remainingElements newPolygons
 
                         Err error ->
                             Err error
@@ -269,16 +337,16 @@ collectTexturedFaces parsedFile groups polygons =
             Ok (TriangularMesh.triangles polygons)
 
 
-addTexturedFacesPolygons : ParsedFile -> List (Maybe Int) -> List (List (Maybe Int)) -> List (List (List (Maybe Int))) -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (List ( TexturedFace, TexturedFace, TexturedFace ))
-addTexturedFacesPolygons parsedFile firstVertex vertices groupIndices polygons =
+addTexturedFacesPolygons : VertexData -> List (Maybe Int) -> List (List (Maybe Int)) -> List (List (List (Maybe Int))) -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (List ( TexturedFace, TexturedFace, TexturedFace ))
+addTexturedFacesPolygons vertexData firstVertex vertices elementIndices polygons =
     case vertices of
         _ :: [] ->
-            case groupIndices of
+            case elementIndices of
                 [] ->
                     Ok polygons
 
-                (first :: indices) :: remainingGroupIndices ->
-                    addTexturedFacesPolygons parsedFile first indices remainingGroupIndices polygons
+                (first :: indices) :: remainingElementIndices ->
+                    addTexturedFacesPolygons vertexData first indices remainingElementIndices polygons
 
                 _ ->
                     Err "Missing indices"
@@ -290,21 +358,21 @@ addTexturedFacesPolygons parsedFile firstVertex vertices groupIndices polygons =
                         [ Just p1, Just uv1, Just n1 ] ->
                             let
                                 maybeV1 =
-                                    Maybe.map3 TexturedFace (Array.get (p1 - 1) parsedFile.positions) (Array.get (n1 - 1) parsedFile.normals) (Array.get (uv1 - 1) parsedFile.uvs)
+                                    Maybe.map3 TexturedFace (Array.get (p1 - 1) vertexData.positions) (Array.get (n1 - 1) vertexData.normals) (Array.get (uv1 - 1) vertexData.uvs)
 
                                 maybeV2 =
-                                    Maybe.map3 TexturedFace (Array.get (p2 - 1) parsedFile.positions) (Array.get (n2 - 1) parsedFile.normals) (Array.get (uv2 - 1) parsedFile.uvs)
+                                    Maybe.map3 TexturedFace (Array.get (p2 - 1) vertexData.positions) (Array.get (n2 - 1) vertexData.normals) (Array.get (uv2 - 1) vertexData.uvs)
 
                                 maybeV3 =
-                                    Maybe.map3 TexturedFace (Array.get (p3 - 1) parsedFile.positions) (Array.get (n3 - 1) parsedFile.normals) (Array.get (uv3 - 1) parsedFile.uvs)
+                                    Maybe.map3 TexturedFace (Array.get (p3 - 1) vertexData.positions) (Array.get (n3 - 1) vertexData.normals) (Array.get (uv3 - 1) vertexData.uvs)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
                                     addTexturedFacesPolygons
-                                        parsedFile
+                                        vertexData
                                         firstVertex
                                         remainingVertices
-                                        groupIndices
+                                        elementIndices
                                         (triangle :: polygons)
 
                                 Nothing ->
@@ -320,28 +388,29 @@ addTexturedFacesPolygons parsedFile firstVertex vertices groupIndices polygons =
             Err "Missing indices"
 
 
-oneOfHelp : ParsedFile -> List (Decoder a) -> Result String a
-oneOfHelp parsedFile decoders =
+oneOfHelp : VertexData -> Elements -> List (Decoder a) -> Result String a
+oneOfHelp vertexData elements decoders =
     case decoders of
         [] ->
             Err "Failed oneOf"
 
         (Decoder decoder) :: remainingDecoders ->
-            case decoder parsedFile of
+            case decoder vertexData elements of
                 Ok res ->
                     Ok res
 
                 Err _ ->
-                    oneOfHelp parsedFile remainingDecoders
+                    oneOfHelp vertexData elements remainingDecoders
 
 
-parse : (Float -> Length) -> String -> Result String ParsedFile
-parse units content =
-    parseHelp units (String.lines content) [] [] [] [] Nothing Nothing [ "default" ] []
+parse : (Float -> Length) -> (VertexData -> Elements -> Result String a) -> String -> Result String a
+parse units decode content =
+    parseHelp units decode (String.lines content) [] [] [] [] Nothing Nothing [ "default" ] []
 
 
 parseHelp :
     (Float -> Length)
+    -> (VertexData -> Elements -> Result String a)
     -> List String
     -> List (Point3d Meters ObjCoordinates)
     -> List (Vector3d Unitless ObjCoordinates)
@@ -351,22 +420,22 @@ parseHelp :
     -> Maybe String
     -> List String
     -> List (List (List (Maybe Int)))
-    -> Result String ParsedFile
-parseHelp units lines positions normals uvs faces_ object_ material_ groups indices =
+    -> Result String a
+parseHelp units decode lines positions normals uvs elements object_ material_ groups_ indices =
     case lines of
         [] ->
-            Result.Ok
+            decode
                 { positions = Array.fromList (List.reverse positions)
                 , normals = Array.fromList (List.reverse normals)
                 , uvs = Array.fromList (List.reverse uvs)
-                , faces =
-                    if indices == [] then
-                        faces_
-
-                    else
-                        -- flush the last group of face indices
-                        ( { groups = groups, object = object_, material = material_ }, indices ) :: faces_
                 }
+                (if indices == [] then
+                    elements
+
+                 else
+                    -- flush the last group of face indices
+                    ( { groups = groups_, object = object_, material = material_ }, indices ) :: elements
+                )
 
         line :: remainingLines ->
             case parseLine units line of
@@ -374,35 +443,35 @@ parseHelp units lines positions normals uvs faces_ object_ material_ groups indi
                     let
                         newFaces =
                             if indices == [] then
-                                faces_
+                                elements
 
                             else
-                                ( { groups = groups, object = object_, material = material_ }, indices ) :: faces_
+                                ( { groups = groups_, object = object_, material = material_ }, indices ) :: elements
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
-                            parseHelp units remainingLines positions normals uvs newFaces object_ material_ newGroups []
+                            parseHelp units decode remainingLines positions normals uvs newFaces object_ material_ newGroups []
 
                         ObjectProperty newObject ->
-                            parseHelp units remainingLines positions normals uvs newFaces (Just newObject) material_ groups []
+                            parseHelp units decode remainingLines positions normals uvs newFaces (Just newObject) material_ groups_ []
 
                         MaterialProperty newMaterial ->
-                            parseHelp units remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups []
+                            parseHelp units decode remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups_ []
 
                 PositionData position ->
-                    parseHelp units remainingLines (position :: positions) normals uvs faces_ object_ material_ groups indices
+                    parseHelp units decode remainingLines (position :: positions) normals uvs elements object_ material_ groups_ indices
 
                 NormalData normal ->
-                    parseHelp units remainingLines positions (normal :: normals) uvs faces_ object_ material_ groups indices
+                    parseHelp units decode remainingLines positions (normal :: normals) uvs elements object_ material_ groups_ indices
 
                 UvData uv ->
-                    parseHelp units remainingLines positions normals (uv :: uvs) faces_ object_ material_ groups indices
+                    parseHelp units decode remainingLines positions normals (uv :: uvs) elements object_ material_ groups_ indices
 
                 FaceIndices faceIndices ->
-                    parseHelp units remainingLines positions normals uvs faces_ object_ material_ groups (faceIndices :: indices)
+                    parseHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ (faceIndices :: indices)
 
                 Skip ->
-                    parseHelp units remainingLines positions normals uvs faces_ object_ material_ groups indices
+                    parseHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ indices
 
                 Error error ->
                     Err error
@@ -423,8 +492,8 @@ parseLine units line =
             [] ->
                 Error "Expect group name"
 
-            groups ->
-                Property (GroupsProperty groups)
+            groups_ ->
+                Property (GroupsProperty groups_)
 
     else if String.startsWith "usemtl " line then
         case String.trim (String.dropLeft 7 line) of
