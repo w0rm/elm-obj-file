@@ -57,21 +57,21 @@ import Vector3d exposing (Vector3d)
 [the OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
 -}
 type Decoder a
-    = Decoder (VertexData -> Elements -> Result String a)
+    = Decoder (VertexData -> List ElementGroup -> Result String a)
 
 
 {-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFaces` from elm-3d-scene.
 -}
 triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
 triangles =
-    Decoder (\vertexData elements -> collectTriangles (collectTriangle vertexData) elements [])
+    Decoder (\vertexData elements -> triangularMesh (addTriangles vertexData) elements [])
 
 
 {-| Decode positions and normals. Use with `Scene3d.Mesh.indexedFaces`.
 -}
 faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
 faces =
-    Decoder (\vertexData elements -> collectTriangles (collectFace vertexData) elements [])
+    Decoder (\vertexData elements -> triangularMesh (addFaces vertexData) elements [])
 
 
 {-| Decode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
@@ -79,14 +79,14 @@ Use with `Scene3d.Mesh.texturedTriangles` or `Scene3d.Mesh.texturedFacets`.
 -}
 texturedTriangles : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
 texturedTriangles =
-    Decoder (\vertexData elements -> collectTriangles (collectTexturedTriangle vertexData) elements [])
+    Decoder (\vertexData elements -> triangularMesh (addTexturedTriangles vertexData) elements [])
 
 
 {-| Decode positions, UV and normals. Use with `Scene3d.Mesh.texturedFaces`.
 -}
 texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
 texturedFaces =
-    Decoder (\vertexData elements -> collectTriangles (collectTexturedFace vertexData) elements [])
+    Decoder (\vertexData elements -> triangularMesh (addTexturedFaces vertexData) elements [])
 
 
 
@@ -132,7 +132,7 @@ group name =
 
 
 {-| Decode the default group. This group has a special meaning,
-all polygons are assigned to it if a group is not specified.
+all triangles\_ are assigned to it if a group is not specified.
 
     defaultGroup =
         group "default"
@@ -287,7 +287,7 @@ oneOf decoders =
     Decoder (\vertexData elements -> oneOfHelp vertexData elements decoders)
 
 
-oneOfHelp : VertexData -> Elements -> List (Decoder a) -> Result String a
+oneOfHelp : VertexData -> List ElementGroup -> List (Decoder a) -> Result String a
 oneOfHelp vertexData elements decoders =
     case decoders of
         [] ->
@@ -361,7 +361,7 @@ combine decoders =
         )
 
 
-combineHelp : VertexData -> Elements -> List (Decoder a) -> List a -> Result String (List a)
+combineHelp : VertexData -> List ElementGroup -> List (Decoder a) -> List a -> Result String (List a)
 combineHelp vertexData elements decoders list =
     case decoders of
         (Decoder decoder) :: remainingDecoders ->
@@ -419,8 +419,12 @@ type alias VertexData =
     }
 
 
-type alias Elements =
-    List ( GroupProperties, List (List (List (Maybe Int))) )
+type alias Element =
+    List (List (Maybe Int))
+
+
+type alias ElementGroup =
+    ( GroupProperties, List Element )
 
 
 type PropertyType
@@ -434,20 +438,20 @@ type Line
     | PositionData (Point3d Meters ObjCoordinates)
     | NormalData (Vector3d Unitless ObjCoordinates)
     | UvData ( Float, Float )
-    | FaceIndices (List (List (Maybe Int)))
+    | ElementData Element
     | Error String
     | Skip
 
 
-collectTriangles : CollectTriangle a -> Elements -> List ( a, a, a ) -> Result String (TriangularMesh a)
-collectTriangles collect elements polygons =
-    case elements of
-        ( _, elementIndices ) :: remainingElements ->
-            case elementIndices of
-                (first :: indices) :: remainingElementIndices ->
-                    case collect first indices remainingElementIndices polygons of
-                        Ok newPolygons ->
-                            collectTriangles collect remainingElements newPolygons
+triangularMesh : AddTriangles a -> List ElementGroup -> List ( a, a, a ) -> Result String (TriangularMesh a)
+triangularMesh add elementGroups triangles_ =
+    case elementGroups of
+        ( _, elements ) :: remainingElementGroups ->
+            case elements of
+                (vertex :: remainingVertices) :: remainingElements ->
+                    case add vertex remainingVertices remainingElements triangles_ of
+                        Ok newTriangles ->
+                            triangularMesh add remainingElementGroups newTriangles
 
                         Err error ->
                             Err error
@@ -456,33 +460,33 @@ collectTriangles collect elements polygons =
                     Err "Empty number of indices in a group"
 
         [] ->
-            if polygons == [] then
+            if triangles_ == [] then
                 Err "Not found"
 
             else
-                Ok (TriangularMesh.triangles polygons)
+                Ok (TriangularMesh.triangles triangles_)
 
 
 {-| Defines a function that knows how to collect a certain kind of triangle
 -}
-type alias CollectTriangle a =
+type alias AddTriangles a =
     List (Maybe Int)
-    -> List (List (Maybe Int))
-    -> List (List (List (Maybe Int)))
+    -> Element
+    -> List Element
     -> List ( a, a, a )
     -> Result String (List ( a, a, a ))
 
 
-collectTriangle : VertexData -> CollectTriangle (Point3d Meters ObjCoordinates)
-collectTriangle vertexData firstVertex vertices elementIndices polygons =
-    case vertices of
+addTriangles : VertexData -> AddTriangles (Point3d Meters ObjCoordinates)
+addTriangles vertexData firstVertex element elements triangles_ =
+    case element of
         [ _ ] ->
-            case elementIndices of
+            case elements of
                 [] ->
-                    Ok polygons
+                    Ok triangles_
 
-                (first :: indices) :: remainingElementIndices ->
-                    collectTriangle vertexData first indices remainingElementIndices polygons
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
+                    addTriangles vertexData newFirstVertex remainingVertices remainingElements triangles_
 
                 _ ->
                     Err "Missing indices"
@@ -504,7 +508,7 @@ collectTriangle vertexData firstVertex vertices elementIndices polygons =
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    collectTriangle vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+                                    addTriangles vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Missing indices"
@@ -519,16 +523,16 @@ collectTriangle vertexData firstVertex vertices elementIndices polygons =
             Err "Missing indices"
 
 
-collectFace : VertexData -> CollectTriangle Face
-collectFace vertexData firstVertex vertices elementIndices polygons =
-    case vertices of
+addFaces : VertexData -> AddTriangles Face
+addFaces vertexData firstVertex element elements triangles_ =
+    case element of
         [ _ ] ->
-            case elementIndices of
+            case elements of
                 [] ->
-                    Ok polygons
+                    Ok triangles_
 
-                (first :: indices) :: remainingElementIndices ->
-                    collectFace vertexData first indices remainingElementIndices polygons
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
+                    addFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
 
                 _ ->
                     Err "Missing indices"
@@ -550,7 +554,7 @@ collectFace vertexData firstVertex vertices elementIndices polygons =
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    collectFace vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+                                    addFaces vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Missing indices"
@@ -565,16 +569,16 @@ collectFace vertexData firstVertex vertices elementIndices polygons =
             Err "Missing indices"
 
 
-collectTexturedTriangle : VertexData -> CollectTriangle TexturedTriangle
-collectTexturedTriangle vertexData firstVertex vertices elementIndices polygons =
-    case vertices of
+addTexturedTriangles : VertexData -> AddTriangles TexturedTriangle
+addTexturedTriangles vertexData firstVertex element elements triangles_ =
+    case element of
         [ _ ] ->
-            case elementIndices of
+            case elements of
                 [] ->
-                    Ok polygons
+                    Ok triangles_
 
-                (first :: indices) :: remainingElementIndices ->
-                    collectTexturedTriangle vertexData first indices remainingElementIndices polygons
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
+                    addTexturedTriangles vertexData newFirstVertex remainingVertices remainingElements triangles_
 
                 _ ->
                     Err "Missing indices"
@@ -596,7 +600,7 @@ collectTexturedTriangle vertexData firstVertex vertices elementIndices polygons 
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    collectTexturedTriangle vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+                                    addTexturedTriangles vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Missing indices"
@@ -611,16 +615,16 @@ collectTexturedTriangle vertexData firstVertex vertices elementIndices polygons 
             Err "Missing indices"
 
 
-collectTexturedFace : VertexData -> CollectTriangle TexturedFace
-collectTexturedFace vertexData firstVertex vertices elementIndices polygons =
-    case vertices of
+addTexturedFaces : VertexData -> AddTriangles TexturedFace
+addTexturedFaces vertexData firstVertex element elements triangles_ =
+    case element of
         [ _ ] ->
-            case elementIndices of
+            case elements of
                 [] ->
-                    Ok polygons
+                    Ok triangles_
 
-                (first :: indices) :: remainingElementIndices ->
-                    collectTexturedFace vertexData first indices remainingElementIndices polygons
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
+                    addTexturedFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
 
                 _ ->
                     Err "Missing indices"
@@ -642,7 +646,7 @@ collectTexturedFace vertexData firstVertex vertices elementIndices polygons =
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    collectTexturedFace vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+                                    addTexturedFaces vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Missing indices"
@@ -659,18 +663,18 @@ collectTexturedFace vertexData firstVertex vertices elementIndices polygons =
 
 decodeHelp :
     (Float -> Length)
-    -> (VertexData -> Elements -> Result String a)
+    -> (VertexData -> List ElementGroup -> Result String a)
     -> List String
     -> List (Point3d Meters ObjCoordinates)
     -> List (Vector3d Unitless ObjCoordinates)
     -> List ( Float, Float )
-    -> List ( GroupProperties, List (List (List (Maybe Int))) )
+    -> List ElementGroup
     -> Maybe String
     -> Maybe String
     -> List String
-    -> List (List (List (Maybe Int)))
+    -> List Element
     -> Result String a
-decodeHelp units decode lines positions normals uvs elements object_ material_ groups_ indices =
+decodeHelp units decode lines positions normals uvs elementGroups object_ material_ groups_ elements =
     case lines of
         [] ->
             decode
@@ -678,49 +682,49 @@ decodeHelp units decode lines positions normals uvs elements object_ material_ g
                 , normals = Array.fromList (List.reverse normals)
                 , uvs = Array.fromList (List.reverse uvs)
                 }
-                (if indices == [] then
-                    elements
+                (if elements == [] then
+                    elementGroups
 
                  else
-                    -- flush the last group of face indices
-                    ( GroupProperties groups_ object_ material_, indices ) :: elements
+                    -- flush the last group
+                    ( GroupProperties groups_ object_ material_, elements ) :: elementGroups
                 )
 
         line :: remainingLines ->
             case parseLine units line of
                 Property propertyType ->
                     let
-                        newFaces =
-                            if indices == [] then
-                                elements
+                        newElementGroups =
+                            if elements == [] then
+                                elementGroups
 
                             else
-                                ( GroupProperties groups_ object_ material_, indices ) :: elements
+                                ( GroupProperties groups_ object_ material_, elements ) :: elementGroups
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
-                            decodeHelp units decode remainingLines positions normals uvs newFaces object_ material_ newGroups []
+                            decodeHelp units decode remainingLines positions normals uvs newElementGroups object_ material_ newGroups []
 
                         ObjectProperty newObject ->
-                            decodeHelp units decode remainingLines positions normals uvs newFaces (Just newObject) material_ groups_ []
+                            decodeHelp units decode remainingLines positions normals uvs newElementGroups (Just newObject) material_ groups_ []
 
                         MaterialProperty newMaterial ->
-                            decodeHelp units decode remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups_ []
+                            decodeHelp units decode remainingLines positions normals uvs newElementGroups object_ (Just newMaterial) groups_ []
 
                 PositionData position ->
-                    decodeHelp units decode remainingLines (position :: positions) normals uvs elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines (position :: positions) normals uvs elementGroups object_ material_ groups_ elements
 
                 NormalData normal ->
-                    decodeHelp units decode remainingLines positions (normal :: normals) uvs elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines positions (normal :: normals) uvs elementGroups object_ material_ groups_ elements
 
                 UvData uv ->
-                    decodeHelp units decode remainingLines positions normals (uv :: uvs) elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines positions normals (uv :: uvs) elementGroups object_ material_ groups_ elements
 
-                FaceIndices faceIndices ->
-                    decodeHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ (faceIndices :: indices)
+                ElementData element ->
+                    decodeHelp units decode remainingLines positions normals uvs elementGroups object_ material_ groups_ (element :: elements)
 
                 Skip ->
-                    decodeHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines positions normals uvs elementGroups object_ material_ groups_ elements
 
                 Error error ->
                     Err error
@@ -779,10 +783,10 @@ parseLine units line =
     else if String.startsWith "f " line then
         case String.words (String.dropLeft 2 line) of
             [] ->
-                Error "Expect face indices"
+                Error "Expect element data"
 
-            faceIndices ->
-                FaceIndices (List.map (String.split "/" >> List.map String.toInt) faceIndices)
+            element ->
+                ElementData (List.map (String.split "/" >> List.map String.toInt) element)
 
     else
         Skip
