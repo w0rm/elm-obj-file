@@ -40,6 +40,8 @@ module Obj.Decode exposing
 
 @docs filter, oneOf, fail, succeed, andThen, combine
 
+@docs ObjCoordinates
+
 -}
 
 import Array exposing (Array)
@@ -62,14 +64,28 @@ type Decoder a
 -}
 triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
 triangles =
-    fail "Implement triangles"
+    Decoder
+        (\vertexData elements ->
+            if elements == [] then
+                Err "Not found"
+
+            else
+                collectTriangles (collectTriangle vertexData) elements []
+        )
 
 
 {-| Decode positions and normals. Use with `Scene3d.Mesh.indexedFaces`.
 -}
 faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
 faces =
-    fail "Implement faces"
+    Decoder
+        (\vertexData elements ->
+            if elements == [] then
+                Err "Not found"
+
+            else
+                collectTriangles (collectFace vertexData) elements []
+        )
 
 
 {-| Decode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
@@ -77,7 +93,14 @@ Use with `Scene3d.Mesh.texturedTriangles` or `Scene3d.Mesh.texturedFacets`.
 -}
 texturedTriangles : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
 texturedTriangles =
-    fail "Implement texturedTriangles"
+    Decoder
+        (\vertexData elements ->
+            if elements == [] then
+                Err "Not found"
+
+            else
+                collectTriangles (collectTexturedTriangle vertexData) elements []
+        )
 
 
 {-| Decode positions, UV and normals. Use with `Scene3d.Mesh.texturedFaces`.
@@ -90,7 +113,7 @@ texturedFaces =
                 Err "Not found"
 
             else
-                collectTexturedFaces vertexData elements []
+                collectTriangles (collectTexturedFace vertexData) elements []
         )
 
 
@@ -381,8 +404,26 @@ combineHelp vertexData elements decoders list =
             Ok (List.reverse list)
 
 
+{-| Coordinate system for decoded meshes.
+-}
+type ObjCoordinates
+    = ObjCoordinates
+
+
 
 -- Internals
+
+
+type alias Face =
+    { position : Point3d Meters ObjCoordinates
+    , normal : Vector3d Unitless ObjCoordinates
+    }
+
+
+type alias TexturedTriangle =
+    { position : Point3d Meters ObjCoordinates
+    , uv : ( Float, Float )
+    }
 
 
 type alias TexturedFace =
@@ -390,10 +431,6 @@ type alias TexturedFace =
     , normal : Vector3d Unitless ObjCoordinates
     , uv : ( Float, Float )
     }
-
-
-type ObjCoordinates
-    = ObjCoordinates
 
 
 type alias GroupProperties =
@@ -430,15 +467,15 @@ type Line
     | Skip
 
 
-collectTexturedFaces : VertexData -> Elements -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (TriangularMesh TexturedFace)
-collectTexturedFaces vertexData elements polygons =
+collectTriangles : CollectTriangle a -> Elements -> List ( a, a, a ) -> Result String (TriangularMesh a)
+collectTriangles collect elements polygons =
     case elements of
         ( _, elementIndices ) :: remainingElements ->
             case elementIndices of
                 (first :: indices) :: remainingElementIndices ->
-                    case addTexturedFacesPolygons vertexData first indices remainingElementIndices polygons of
+                    case collect first indices remainingElementIndices polygons of
                         Ok newPolygons ->
-                            collectTexturedFaces vertexData remainingElements newPolygons
+                            collectTriangles collect remainingElements newPolygons
 
                         Err error ->
                             Err error
@@ -450,16 +487,164 @@ collectTexturedFaces vertexData elements polygons =
             Ok (TriangularMesh.triangles polygons)
 
 
-addTexturedFacesPolygons : VertexData -> List (Maybe Int) -> List (List (Maybe Int)) -> List (List (List (Maybe Int))) -> List ( TexturedFace, TexturedFace, TexturedFace ) -> Result String (List ( TexturedFace, TexturedFace, TexturedFace ))
-addTexturedFacesPolygons vertexData firstVertex vertices elementIndices polygons =
+{-| Defines a function that knows how to collect a certain kind of triangle
+-}
+type alias CollectTriangle a =
+    List (Maybe Int)
+    -> List (List (Maybe Int))
+    -> List (List (List (Maybe Int)))
+    -> List ( a, a, a )
+    -> Result String (List ( a, a, a ))
+
+
+collectTriangle : VertexData -> CollectTriangle (Point3d Meters ObjCoordinates)
+collectTriangle vertexData firstVertex vertices elementIndices polygons =
     case vertices of
-        _ :: [] ->
+        [ _ ] ->
             case elementIndices of
                 [] ->
                     Ok polygons
 
                 (first :: indices) :: remainingElementIndices ->
-                    addTexturedFacesPolygons vertexData first indices remainingElementIndices polygons
+                    collectTriangle vertexData first indices remainingElementIndices polygons
+
+                _ ->
+                    Err "Missing indices"
+
+        ((Just p2) :: _) :: remainingVertices ->
+            case remainingVertices of
+                ((Just p3) :: _) :: _ ->
+                    case firstVertex of
+                        (Just p1) :: _ ->
+                            let
+                                maybeV1 =
+                                    Array.get (p1 - 1) vertexData.positions
+
+                                maybeV2 =
+                                    Array.get (p2 - 1) vertexData.positions
+
+                                maybeV3 =
+                                    Array.get (p3 - 1) vertexData.positions
+                            in
+                            case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
+                                Just triangle ->
+                                    collectTriangle vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+
+                                Nothing ->
+                                    Err "Missing indices"
+
+                        _ ->
+                            Err "Missing indices"
+
+                _ ->
+                    Err "Missing indices"
+
+        _ ->
+            Err "Missing indices"
+
+
+collectFace : VertexData -> CollectTriangle Face
+collectFace vertexData firstVertex vertices elementIndices polygons =
+    case vertices of
+        [ _ ] ->
+            case elementIndices of
+                [] ->
+                    Ok polygons
+
+                (first :: indices) :: remainingElementIndices ->
+                    collectFace vertexData first indices remainingElementIndices polygons
+
+                _ ->
+                    Err "Missing indices"
+
+        [ Just p2, _, Just n2 ] :: remainingVertices ->
+            case remainingVertices of
+                [ Just p3, _, Just n3 ] :: _ ->
+                    case firstVertex of
+                        [ Just p1, _, Just n1 ] ->
+                            let
+                                maybeV1 =
+                                    Maybe.map2 Face (Array.get (p1 - 1) vertexData.positions) (Array.get (n1 - 1) vertexData.normals)
+
+                                maybeV2 =
+                                    Maybe.map2 Face (Array.get (p2 - 1) vertexData.positions) (Array.get (n2 - 1) vertexData.normals)
+
+                                maybeV3 =
+                                    Maybe.map2 Face (Array.get (p3 - 1) vertexData.positions) (Array.get (n3 - 1) vertexData.normals)
+                            in
+                            case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
+                                Just triangle ->
+                                    collectFace vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+
+                                Nothing ->
+                                    Err "Missing indices"
+
+                        _ ->
+                            Err "Missing indices"
+
+                _ ->
+                    Err "Missing indices"
+
+        _ ->
+            Err "Missing indices"
+
+
+collectTexturedTriangle : VertexData -> CollectTriangle TexturedTriangle
+collectTexturedTriangle vertexData firstVertex vertices elementIndices polygons =
+    case vertices of
+        [ _ ] ->
+            case elementIndices of
+                [] ->
+                    Ok polygons
+
+                (first :: indices) :: remainingElementIndices ->
+                    collectTexturedTriangle vertexData first indices remainingElementIndices polygons
+
+                _ ->
+                    Err "Missing indices"
+
+        ((Just p2) :: (Just uv2) :: _) :: remainingVertices ->
+            case remainingVertices of
+                ((Just p3) :: (Just uv3) :: _) :: _ ->
+                    case firstVertex of
+                        (Just p1) :: (Just uv1) :: _ ->
+                            let
+                                maybeV1 =
+                                    Maybe.map2 TexturedTriangle (Array.get (p1 - 1) vertexData.positions) (Array.get (uv1 - 1) vertexData.uvs)
+
+                                maybeV2 =
+                                    Maybe.map2 TexturedTriangle (Array.get (p2 - 1) vertexData.positions) (Array.get (uv2 - 1) vertexData.uvs)
+
+                                maybeV3 =
+                                    Maybe.map2 TexturedTriangle (Array.get (p3 - 1) vertexData.positions) (Array.get (uv3 - 1) vertexData.uvs)
+                            in
+                            case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
+                                Just triangle ->
+                                    collectTexturedTriangle vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
+
+                                Nothing ->
+                                    Err "Missing indices"
+
+                        _ ->
+                            Err "Missing indices"
+
+                _ ->
+                    Err "Missing indices"
+
+        _ ->
+            Err "Missing indices"
+
+
+collectTexturedFace : VertexData -> CollectTriangle TexturedFace
+collectTexturedFace vertexData firstVertex vertices elementIndices polygons =
+    case vertices of
+        [ _ ] ->
+            case elementIndices of
+                [] ->
+                    Ok polygons
+
+                (first :: indices) :: remainingElementIndices ->
+                    collectTexturedFace vertexData first indices remainingElementIndices polygons
 
                 _ ->
                     Err "Missing indices"
@@ -481,12 +666,7 @@ addTexturedFacesPolygons vertexData firstVertex vertices elementIndices polygons
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    addTexturedFacesPolygons
-                                        vertexData
-                                        firstVertex
-                                        remainingVertices
-                                        elementIndices
-                                        (triangle :: polygons)
+                                    collectTexturedFace vertexData firstVertex remainingVertices elementIndices (triangle :: polygons)
 
                                 Nothing ->
                                     Err "Missing indices"
