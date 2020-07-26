@@ -24,7 +24,7 @@ import WebGL.Texture
 mesh : Textured ObjCoordinates
 mesh =
     Meshes.Pod.obj
-        |> Obj.Decode.decodeString Length.meters (Obj.Decode.texturedFaces [])
+        |> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces
         |> Result.withDefault TriangularMesh.empty
         |> Scene3d.Mesh.texturedFaces
 

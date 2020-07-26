@@ -1,10 +1,10 @@
 module Obj.Decode exposing
     ( Decoder, triangles, faces, texturedTriangles, texturedFaces
     , decodeString
-    , Filter, object, group, defaultGroup, material
+    , object, group, defaultGroup, material
     , objects, groups, materials
     , map, map2, map3, map4, map5
-    , oneOf, fail, succeed
+    , oneOf, fail, succeed, andThen, combine
     , ObjCoordinates
     )
 
@@ -23,7 +23,7 @@ module Obj.Decode exposing
 
 # Filtering
 
-@docs Filter, object, group, defaultGroup, material
+@docs object, group, defaultGroup, material
 
 
 # Metadata
@@ -38,7 +38,7 @@ module Obj.Decode exposing
 
 # Advanced Decoding
 
-@docs oneOf, fail, succeed
+@docs oneOf, fail, succeed, andThen, combine
 
 -}
 
@@ -94,6 +94,10 @@ texturedFaces =
         )
 
 
+
+-- RUN DECODERS
+
+
 {-| Run the decoder on the string. Takes a function, that knows
 how to convert float coordinates into physical units.
 
@@ -103,49 +107,77 @@ how to convert float coordinates into physical units.
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
-    parse units decode content
+    decodeHelp units decode (String.lines content) [] [] [] [] Nothing Nothing [ "default" ] []
 
 
-{-| All the primitive decodes take a list of filters. This lets you select only the subset of polygons from the OBJ file.
-All filters in the list are joined with the `and`.
+
+-- FILTERING
+
+
+{-| Decode the data for the object. You may store multiple objects in the same OBJ file.
+Like the car base and car wheels.
+
+    base =
+        object "base" triangles
+
+    wheels =
+        object "wheels" triangles
+
 -}
-type Filter
-    = Group String
-    | Material String
-    | Object String
+object : String -> Decoder a -> Decoder a
+object name (Decoder decoder) =
+    Decoder
+        (\vertexData elements ->
+            decoder vertexData
+                (List.filter
+                    (\( properties, _ ) -> properties.material == Just name)
+                    elements
+                )
+        )
 
 
-{-| Filter polygons that belong to a certain group.
+{-| Decode the data for the certain group.
 -}
-group : String -> Filter
-group =
-    Group
+group : String -> Decoder a -> Decoder a
+group name (Decoder decoder) =
+    Decoder
+        (\vertexData elements ->
+            decoder vertexData
+                (List.filter
+                    (\( properties, _ ) -> List.member name properties.groups)
+                    elements
+                )
+        )
 
 
-{-| Filter by default group. This group has a special meaning,
+{-| Decode the default group. This group has a special meaning,
 all polygons are assigned to it if a group is not specified.
 
     defaultGroup =
         group "default"
 
 -}
-defaultGroup : Filter
+defaultGroup : Decoder a -> Decoder a
 defaultGroup =
-    Group "default"
+    group "default"
 
 
-{-| Filter by object. You may store multiple objects in the same OBJ file. Like a car base and car wheels.
+{-| Decode the material.
 -}
-object : String -> Filter
-object =
-    Object
+material : String -> Decoder a -> Decoder a
+material name (Decoder decoder) =
+    Decoder
+        (\vertexData elements ->
+            decoder vertexData
+                (List.filter
+                    (\( properties, _ ) -> properties.material == Just name)
+                    elements
+                )
+        )
 
 
-{-| Filter by material name.
--}
-material : String -> Filter
-material =
-    Material
+
+-- METADATA
 
 
 {-| Decode all the objects.
@@ -209,6 +241,10 @@ materials =
         )
 
 
+
+-- MAPPING
+
+
 {-| Transform the decoder. May be useful in case need to post process the mesh data.
 -}
 map : (a -> b) -> Decoder a -> Decoder b
@@ -245,11 +281,30 @@ map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decode
     Decoder (\vertexData elements -> Result.map5 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements) (decoderD vertexData elements) (decoderE vertexData elements))
 
 
+
+-- ADVANCED DECODING
+
+
 {-| Try a bunch of different decoders. You will get the result from the first one that succeeds.
 -}
 oneOf : List (Decoder a) -> Decoder a
 oneOf decoders =
     Decoder (\vertexData elements -> oneOfHelp vertexData elements decoders)
+
+
+oneOfHelp : VertexData -> Elements -> List (Decoder a) -> Result String a
+oneOfHelp vertexData elements decoders =
+    case decoders of
+        [] ->
+            Err "Failed oneOf"
+
+        (Decoder decoder) :: remainingDecoders ->
+            case decoder vertexData elements of
+                Ok res ->
+                    Ok res
+
+                Err _ ->
+                    oneOfHelp vertexData elements remainingDecoders
 
 
 {-| A decoder that always succeeds with the result. May be useful in combination with `oneOf` to
@@ -266,6 +321,64 @@ Use it in case you need custom error messages.
 fail : String -> Decoder a
 fail error =
     Decoder (\_ _ -> Result.Err error)
+
+
+{-| Run one decoder and then run another decoder. Useful when you first want to look at metadata, and then filter based on that.
+-}
+andThen : (a -> Decoder b) -> Decoder a -> Decoder b
+andThen fn (Decoder decoderA) =
+    Decoder
+        (\vertexData elements ->
+            case decoderA vertexData elements of
+                Ok result ->
+                    case fn result of
+                        Decoder decoderB ->
+                            decoderB vertexData elements
+
+                Err error ->
+                    Err error
+        )
+
+
+{-| Combine multiple decoders together. An example use case is when you want
+to extract meshes for all materials:
+
+    -- Decode triangles for selected materials
+    trianglesForMaterials names =
+        names
+            |> List.map
+                (\name ->
+                    map (\triangles -> ( name, triangles ))
+                        (material name triangles)
+                )
+            |> combine
+
+    -- Decode materials, and then decode triangles for these materials.
+    withMaterials =
+        materials |> andThen trianglesForMaterials
+
+-}
+combine : List (Decoder a) -> Decoder (List a)
+combine decoders =
+    Decoder
+        (\vertexData elements ->
+            combineHelp vertexData elements decoders []
+        )
+
+
+combineHelp : VertexData -> Elements -> List (Decoder a) -> List a -> Result String (List a)
+combineHelp vertexData elements decoders list =
+    case decoders of
+        (Decoder decoder) :: remainingDecoders ->
+            case decoder vertexData elements of
+                Ok result ->
+                    combineHelp vertexData elements remainingDecoders (result :: list)
+
+                Err error ->
+                    Err error
+
+        [] ->
+            Ok (List.reverse list)
 
 
 
@@ -388,27 +501,7 @@ addTexturedFacesPolygons vertexData firstVertex vertices elementIndices polygons
             Err "Missing indices"
 
 
-oneOfHelp : VertexData -> Elements -> List (Decoder a) -> Result String a
-oneOfHelp vertexData elements decoders =
-    case decoders of
-        [] ->
-            Err "Failed oneOf"
-
-        (Decoder decoder) :: remainingDecoders ->
-            case decoder vertexData elements of
-                Ok res ->
-                    Ok res
-
-                Err _ ->
-                    oneOfHelp vertexData elements remainingDecoders
-
-
-parse : (Float -> Length) -> (VertexData -> Elements -> Result String a) -> String -> Result String a
-parse units decode content =
-    parseHelp units decode (String.lines content) [] [] [] [] Nothing Nothing [ "default" ] []
-
-
-parseHelp :
+decodeHelp :
     (Float -> Length)
     -> (VertexData -> Elements -> Result String a)
     -> List String
@@ -421,7 +514,7 @@ parseHelp :
     -> List String
     -> List (List (List (Maybe Int)))
     -> Result String a
-parseHelp units decode lines positions normals uvs elements object_ material_ groups_ indices =
+decodeHelp units decode lines positions normals uvs elements object_ material_ groups_ indices =
     case lines of
         [] ->
             decode
@@ -450,28 +543,28 @@ parseHelp units decode lines positions normals uvs elements object_ material_ gr
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
-                            parseHelp units decode remainingLines positions normals uvs newFaces object_ material_ newGroups []
+                            decodeHelp units decode remainingLines positions normals uvs newFaces object_ material_ newGroups []
 
                         ObjectProperty newObject ->
-                            parseHelp units decode remainingLines positions normals uvs newFaces (Just newObject) material_ groups_ []
+                            decodeHelp units decode remainingLines positions normals uvs newFaces (Just newObject) material_ groups_ []
 
                         MaterialProperty newMaterial ->
-                            parseHelp units decode remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups_ []
+                            decodeHelp units decode remainingLines positions normals uvs newFaces object_ (Just newMaterial) groups_ []
 
                 PositionData position ->
-                    parseHelp units decode remainingLines (position :: positions) normals uvs elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines (position :: positions) normals uvs elements object_ material_ groups_ indices
 
                 NormalData normal ->
-                    parseHelp units decode remainingLines positions (normal :: normals) uvs elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines positions (normal :: normals) uvs elements object_ material_ groups_ indices
 
                 UvData uv ->
-                    parseHelp units decode remainingLines positions normals (uv :: uvs) elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines positions normals (uv :: uvs) elements object_ material_ groups_ indices
 
                 FaceIndices faceIndices ->
-                    parseHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ (faceIndices :: indices)
+                    decodeHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ (faceIndices :: indices)
 
                 Skip ->
-                    parseHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ indices
+                    decodeHelp units decode remainingLines positions normals uvs elements object_ material_ groups_ indices
 
                 Error error ->
                     Err error
@@ -537,20 +630,3 @@ parseLine units line =
 
     else
         Skip
-
-
-matches : List Filter -> GroupProperties -> Bool
-matches filters properties =
-    List.all
-        (\filter ->
-            case filter of
-                Group group_ ->
-                    List.member group_ properties.groups
-
-                Object object_ ->
-                    properties.object == Just object_
-
-                Material material_ ->
-                    properties.material == Just material_
-        )
-        filters
