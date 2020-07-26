@@ -1,8 +1,9 @@
 module Obj.Decode exposing
-    ( Decoder, triangles, faces, texturedTriangles, texturedFaces
+    ( Decoder
+    , triangles, faces, texturedTriangles, texturedFaces
     , decodeString
     , object, group, defaultGroup, material
-    , objects, groups, materials
+    , objectNames, groupNames, materialNames
     , map, map2, map3, map4, map5
     , oneOf, fail, succeed, andThen, combine
     , ObjCoordinates
@@ -10,10 +11,19 @@ module Obj.Decode exposing
 
 {-|
 
+@docs Decoder
+
 
 # Primitives
 
-@docs Decoder, triangles, faces, texturedTriangles, texturedFaces
+elm-obj-file currently supports triangular meshes that may have normal vectors and/or texture coordinates. Support for points and line segments may be added in a future release.
+
+By default, the geometrical data is returned in the `ObjCoordinates` [coordinate system](https://github.com/ianmackenzie/elm-geometry#coordinate-systems).
+It's also possible to [transform coordinates](#coordinate-conversion) if desired.
+
+Note that all primitive decoders require at least one face and will fail if no faces are found.
+
+@docs triangles, faces, texturedTriangles, texturedFaces
 
 
 # Run Decoders
@@ -28,7 +38,7 @@ module Obj.Decode exposing
 
 # Metadata
 
-@docs objects, groups, materials
+@docs objectNames, groupNames, materialNames
 
 
 # Mapping
@@ -39,6 +49,9 @@ module Obj.Decode exposing
 # Advanced Decoding
 
 @docs filter, oneOf, fail, succeed, andThen, combine
+
+
+# Coordinate Conversion
 
 @docs ObjCoordinates
 
@@ -60,7 +73,7 @@ type Decoder a
     = Decoder (VertexData -> List ElementGroup -> Result String a)
 
 
-{-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFaces` from elm-3d-scene.
+{-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFacets` from elm-3d-scene.
 -}
 triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
 triangles =
@@ -154,15 +167,15 @@ material name =
 -- METADATA
 
 
-{-| Decode all the objects.
+{-| Decode all object names within the current filter.
 -}
-objects : Decoder (List String)
-objects =
+objectNames : Decoder (List String)
+objectNames =
     Decoder
         (\_ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _ ) objectsSet ->
+                    (\( groupProperties, _, _ ) objectsSet ->
                         case groupProperties.object of
                             Just obj ->
                                 Set.insert obj objectsSet
@@ -176,15 +189,15 @@ objects =
         )
 
 
-{-| Decode all the groups.
+{-| Decode all group names within the current filter.
 -}
-groups : Decoder (List String)
-groups =
+groupNames : Decoder (List String)
+groupNames =
     Decoder
         (\_ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _ ) groupsSet ->
+                    (\( groupProperties, _, _ ) groupsSet ->
                         List.foldl Set.insert groupsSet groupProperties.groups
                     )
                     Set.empty
@@ -193,15 +206,15 @@ groups =
         )
 
 
-{-| Decode all the materials.
+{-| Decode all material names within the current filter.
 -}
-materials : Decoder (List String)
-materials =
+materialNames : Decoder (List String)
+materialNames =
     Decoder
         (\_ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _ ) materialsSet ->
+                    (\( groupProperties, _, _ ) materialsSet ->
                         case groupProperties.material of
                             Just obj ->
                                 Set.insert obj materialsSet
@@ -274,7 +287,7 @@ filter fn (Decoder decoder) =
         (\vertexData elements ->
             decoder vertexData
                 (List.filter
-                    (\( properties, _ ) -> fn properties)
+                    (\( properties, _, _ ) -> fn properties)
                     elements
                 )
         )
@@ -419,12 +432,16 @@ type alias VertexData =
     }
 
 
-type alias Element =
-    List (List (Maybe Int))
+type Element
+    = Element Vertex (List Vertex)
+
+
+type Vertex
+    = Vertex Int (Maybe Int) (Maybe Int)
 
 
 type alias ElementGroup =
-    ( GroupProperties, List Element )
+    ( GroupProperties, Element, List Element )
 
 
 type PropertyType
@@ -446,9 +463,9 @@ type Line
 triangularMesh : AddTriangles a -> List ElementGroup -> List ( a, a, a ) -> Result String (TriangularMesh a)
 triangularMesh add elementGroups triangles_ =
     case elementGroups of
-        ( _, elements ) :: remainingElementGroups ->
-            case elements of
-                (vertex :: remainingVertices) :: remainingElements ->
+        ( _, firstElement, remainingElements ) :: remainingElementGroups ->
+            case firstElement of
+                Element vertex remainingVertices ->
                     case add vertex remainingVertices remainingElements triangles_ of
                         Ok newTriangles ->
                             triangularMesh add remainingElementGroups newTriangles
@@ -456,12 +473,9 @@ triangularMesh add elementGroups triangles_ =
                         Err error ->
                             Err error
 
-                _ ->
-                    Err "Empty number of indices in a group"
-
         [] ->
             if triangles_ == [] then
-                Err "Not found"
+                Err "No faces found"
 
             else
                 Ok (TriangularMesh.triangles triangles_)
@@ -470,32 +484,33 @@ triangularMesh add elementGroups triangles_ =
 {-| Defines a function that knows how to collect a certain kind of triangle
 -}
 type alias AddTriangles a =
-    List (Maybe Int)
-    -> Element
+    Vertex
+    -> List Vertex
     -> List Element
     -> List ( a, a, a )
     -> Result String (List ( a, a, a ))
 
 
 addTriangles : VertexData -> AddTriangles (Point3d Meters ObjCoordinates)
-addTriangles vertexData firstVertex element elements triangles_ =
-    case element of
+addTriangles vertexData firstVertex vertices elements triangles_ =
+    case vertices of
         [ _ ] ->
             case elements of
+                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                    addTriangles vertexData
+                        newFirstVertex
+                        remainingVertices
+                        remainingElements
+                        triangles_
+
                 [] ->
                     Ok triangles_
 
-                (newFirstVertex :: remainingVertices) :: remainingElements ->
-                    addTriangles vertexData newFirstVertex remainingVertices remainingElements triangles_
-
-                _ ->
-                    Err "Missing indices"
-
-        ((Just p2) :: _) :: remainingVertices ->
+        (Vertex p2 _ _) :: remainingVertices ->
             case remainingVertices of
-                ((Just p3) :: _) :: _ ->
+                (Vertex p3 _ _) :: _ ->
                     case firstVertex of
-                        (Just p1) :: _ ->
+                        Vertex p1 _ _ ->
                             let
                                 maybeV1 =
                                     Array.get (p1 - 1) vertexData.positions
@@ -511,37 +526,31 @@ addTriangles vertexData firstVertex element elements triangles_ =
                                     addTriangles vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
-                                    Err "Missing indices"
-
-                        _ ->
-                            Err "Missing indices"
+                                    Err "Index out of range"
 
                 _ ->
-                    Err "Missing indices"
+                    Err "A face with less than three vertices"
 
         _ ->
-            Err "Missing indices"
+            Err "A face with less than three vertices"
 
 
 addFaces : VertexData -> AddTriangles Face
-addFaces vertexData firstVertex element elements triangles_ =
-    case element of
+addFaces vertexData firstVertex vertices elements triangles_ =
+    case vertices of
         [ _ ] ->
             case elements of
                 [] ->
                     Ok triangles_
 
-                (newFirstVertex :: remainingVertices) :: remainingElements ->
+                (Element newFirstVertex remainingVertices) :: remainingElements ->
                     addFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
 
-                _ ->
-                    Err "Missing indices"
-
-        [ Just p2, _, Just n2 ] :: remainingVertices ->
+        (Vertex p2 _ (Just n2)) :: remainingVertices ->
             case remainingVertices of
-                [ Just p3, _, Just n3 ] :: _ ->
+                (Vertex p3 _ (Just n3)) :: _ ->
                     case firstVertex of
-                        [ Just p1, _, Just n1 ] ->
+                        Vertex p1 _ (Just n1) ->
                             let
                                 maybeV1 =
                                     Maybe.map2 Face (Array.get (p1 - 1) vertexData.positions) (Array.get (n1 - 1) vertexData.normals)
@@ -557,37 +566,34 @@ addFaces vertexData firstVertex element elements triangles_ =
                                     addFaces vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
-                                    Err "Missing indices"
+                                    Err "Index out of range"
 
                         _ ->
-                            Err "Missing indices"
+                            Err "Vertex has no normal vector"
 
                 _ ->
-                    Err "Missing indices"
+                    Err "Vertex has no normal vector"
 
         _ ->
-            Err "Missing indices"
+            Err "Vertex has no normal vector"
 
 
 addTexturedTriangles : VertexData -> AddTriangles TexturedTriangle
-addTexturedTriangles vertexData firstVertex element elements triangles_ =
-    case element of
+addTexturedTriangles vertexData firstVertex vertices elements triangles_ =
+    case vertices of
         [ _ ] ->
             case elements of
+                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                    addTexturedTriangles vertexData newFirstVertex remainingVertices remainingElements triangles_
+
                 [] ->
                     Ok triangles_
 
-                (newFirstVertex :: remainingVertices) :: remainingElements ->
-                    addTexturedTriangles vertexData newFirstVertex remainingVertices remainingElements triangles_
-
-                _ ->
-                    Err "Missing indices"
-
-        ((Just p2) :: (Just uv2) :: _) :: remainingVertices ->
+        (Vertex p2 (Just uv2) _) :: remainingVertices ->
             case remainingVertices of
-                ((Just p3) :: (Just uv3) :: _) :: _ ->
+                (Vertex p3 (Just uv3) _) :: _ ->
                     case firstVertex of
-                        (Just p1) :: (Just uv1) :: _ ->
+                        Vertex p1 (Just uv1) _ ->
                             let
                                 maybeV1 =
                                     Maybe.map2 TexturedTriangle (Array.get (p1 - 1) vertexData.positions) (Array.get (uv1 - 1) vertexData.uvs)
@@ -603,37 +609,34 @@ addTexturedTriangles vertexData firstVertex element elements triangles_ =
                                     addTexturedTriangles vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
-                                    Err "Missing indices"
+                                    Err "Index out of range"
 
                         _ ->
-                            Err "Missing indices"
+                            Err "Vertex has no texture coordinates"
 
                 _ ->
-                    Err "Missing indices"
+                    Err "Vertex has no texture coordinates"
 
         _ ->
-            Err "Missing indices"
+            Err "Vertex has no texture coordinates"
 
 
 addTexturedFaces : VertexData -> AddTriangles TexturedFace
-addTexturedFaces vertexData firstVertex element elements triangles_ =
-    case element of
+addTexturedFaces vertexData firstVertex vertices elements triangles_ =
+    case vertices of
         [ _ ] ->
             case elements of
+                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                    addTexturedFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
+
                 [] ->
                     Ok triangles_
 
-                (newFirstVertex :: remainingVertices) :: remainingElements ->
-                    addTexturedFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
-
-                _ ->
-                    Err "Missing indices"
-
-        [ Just p2, Just uv2, Just n2 ] :: remainingVertices ->
+        (Vertex p2 (Just uv2) (Just n2)) :: remainingVertices ->
             case remainingVertices of
-                [ Just p3, Just uv3, Just n3 ] :: _ ->
+                (Vertex p3 (Just uv3) (Just n3)) :: _ ->
                     case firstVertex of
-                        [ Just p1, Just uv1, Just n1 ] ->
+                        Vertex p1 (Just uv1) (Just n1) ->
                             let
                                 maybeV1 =
                                     Maybe.map3 TexturedFace (Array.get (p1 - 1) vertexData.positions) (Array.get (n1 - 1) vertexData.normals) (Array.get (uv1 - 1) vertexData.uvs)
@@ -649,16 +652,16 @@ addTexturedFaces vertexData firstVertex element elements triangles_ =
                                     addTexturedFaces vertexData firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
-                                    Err "Missing indices"
+                                    Err "Index out of range"
 
                         _ ->
-                            Err "Missing indices"
+                            Err "Vertex missing normal vector and/or texture coordinates"
 
                 _ ->
-                    Err "Missing indices"
+                    Err "Vertex missing normal vector and/or texture coordinates"
 
         _ ->
-            Err "Missing indices"
+            Err "Vertex missing normal vector and/or texture coordinates"
 
 
 decodeHelp :
@@ -682,12 +685,13 @@ decodeHelp units decode lines positions normals uvs elementGroups object_ materi
                 , normals = Array.fromList (List.reverse normals)
                 , uvs = Array.fromList (List.reverse uvs)
                 }
-                (if elements == [] then
-                    elementGroups
+                (case elements of
+                    [] ->
+                        elementGroups
 
-                 else
-                    -- flush the last group
-                    ( GroupProperties groups_ object_ material_, elements ) :: elementGroups
+                    element :: remainingElements ->
+                        -- flush the last group
+                        ( GroupProperties groups_ object_ material_, element, remainingElements ) :: elementGroups
                 )
 
         line :: remainingLines ->
@@ -695,11 +699,12 @@ decodeHelp units decode lines positions normals uvs elementGroups object_ materi
                 Property propertyType ->
                     let
                         newElementGroups =
-                            if elements == [] then
-                                elementGroups
+                            case elements of
+                                [] ->
+                                    elementGroups
 
-                            else
-                                ( GroupProperties groups_ object_ material_, elements ) :: elementGroups
+                                element :: remainingElements ->
+                                    ( GroupProperties groups_ object_ material_, element, remainingElements ) :: elementGroups
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
@@ -735,7 +740,7 @@ parseLine units line =
     if String.startsWith "o " line then
         case String.trim (String.dropLeft 2 line) of
             "" ->
-                Error "Expect object name"
+                Error "No object name"
 
             object_ ->
                 Property (ObjectProperty object_)
@@ -743,7 +748,7 @@ parseLine units line =
     else if String.startsWith "g " line then
         case String.words (String.dropLeft 2 line) of
             [] ->
-                Error "Expect group name"
+                Error "No groups specified"
 
             groups_ ->
                 Property (GroupsProperty groups_)
@@ -751,7 +756,7 @@ parseLine units line =
     else if String.startsWith "usemtl " line then
         case String.trim (String.dropLeft 7 line) of
             "" ->
-                Error "Expect material name"
+                Error "No material name"
 
             material_ ->
                 Property (MaterialProperty material_)
@@ -762,7 +767,7 @@ parseLine units line =
                 PositionData (Point3d.xyz (units x) (units y) (units z))
 
             _ ->
-                Error "Invalid position data"
+                Error "Invalid position format"
 
     else if String.startsWith "vt " line then
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
@@ -770,7 +775,7 @@ parseLine units line =
                 UvData ( x, y )
 
             _ ->
-                Error "Invalid uv data"
+                Error "Invalid texture coordinates format"
 
     else if String.startsWith "vn " line then
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
@@ -778,15 +783,45 @@ parseLine units line =
                 NormalData (Vector3d.unitless x y z)
 
             _ ->
-                Error "Invalid normal data"
+                Error "Invalid normal vector format"
 
     else if String.startsWith "f " line then
-        case String.words (String.dropLeft 2 line) of
-            [] ->
-                Error "Expect element data"
+        case parseVertices (String.words (String.dropLeft 2 line)) [] of
+            Ok [] ->
+                Error "Face has no vertices"
 
-            element ->
-                ElementData (List.map (String.split "/" >> List.map String.toInt) element)
+            Ok [ _ ] ->
+                Error "Face has less than three vertices"
+
+            Ok [ _, _ ] ->
+                Error "Face has less than three vertices"
+
+            Ok (first :: vertices) ->
+                ElementData (Element first vertices)
+
+            Err err ->
+                Error err
 
     else
         Skip
+
+
+parseVertices : List String -> List Vertex -> Result String (List Vertex)
+parseVertices list vertices =
+    case list of
+        first :: more ->
+            case List.map String.toInt (String.split "/" first) of
+                [ Just p ] ->
+                    parseVertices more (Vertex p Nothing Nothing :: vertices)
+
+                [ Just p, uv ] ->
+                    parseVertices more (Vertex p uv Nothing :: vertices)
+
+                [ Just p, uv, n ] ->
+                    parseVertices more (Vertex p uv n :: vertices)
+
+                _ ->
+                    Err "Invalid face format"
+
+        [] ->
+            Ok (List.reverse vertices)
