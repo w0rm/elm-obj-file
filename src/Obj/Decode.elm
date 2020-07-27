@@ -59,6 +59,7 @@ Note that all primitive decoders require at least one face and will fail if no f
 -}
 
 import Array exposing (Array)
+import Dict exposing (Dict)
 import Direction3d exposing (Direction3d)
 import Frame3d exposing (Frame3d)
 import Length exposing (Length, Meters)
@@ -415,7 +416,7 @@ but it was exported with Y-up:
 -}
 trianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh (Point3d Meters coordinates))
 trianglesIn frame =
-    Decoder (\vertexData elements -> triangularMesh (addTriangles vertexData frame) elements [])
+    Decoder (\vertexData elements -> indexedTriangularMesh (addIndexedTriangles vertexData frame) elements initialIndexedState [])
 
 
 {-| -}
@@ -501,6 +502,16 @@ type Line
     | Skip
 
 
+{-| Defines a function that knows how to collect a certain kind of triangle
+-}
+type alias AddTriangles a =
+    Vertex
+    -> List Vertex
+    -> List Element
+    -> List ( a, a, a )
+    -> Result String (List ( a, a, a ))
+
+
 triangularMesh : AddTriangles a -> List ElementGroup -> List ( a, a, a ) -> Result String (TriangularMesh a)
 triangularMesh add elementGroups triangles_ =
     case elementGroups of
@@ -522,14 +533,147 @@ triangularMesh add elementGroups triangles_ =
                 Ok (TriangularMesh.triangles triangles_)
 
 
+type alias IndexedState a =
+    { maxIndex : Int
+    , indexMap : Dict Int Int
+    , vertices : List a
+    }
+
+
+initialIndexedState : IndexedState a
+initialIndexedState =
+    { maxIndex = -1
+    , indexMap = Dict.empty
+    , vertices = []
+    }
+
+
 {-| Defines a function that knows how to collect a certain kind of triangle
 -}
-type alias AddTriangles a =
+type alias AddIndexedTriangles a =
     Vertex
     -> List Vertex
     -> List Element
-    -> List ( a, a, a )
-    -> Result String (List ( a, a, a ))
+    -> IndexedState a
+    -> List ( Int, Int, Int )
+    -> Result String ( IndexedState a, List ( Int, Int, Int ) )
+
+
+indexedTriangularMesh : AddIndexedTriangles a -> List ElementGroup -> IndexedState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
+indexedTriangularMesh add elementGroups indexedState faceIndices =
+    case elementGroups of
+        ( _, firstElement, remainingElements ) :: remainingElementGroups ->
+            case firstElement of
+                Element vertex remainingVertices ->
+                    case add vertex remainingVertices remainingElements indexedState faceIndices of
+                        Ok ( newIndexedState, newFaceIndices ) ->
+                            indexedTriangularMesh add remainingElementGroups newIndexedState newFaceIndices
+
+                        Err error ->
+                            Err error
+
+        [] ->
+            if faceIndices == [] then
+                Err "No faces found"
+
+            else
+                Ok (TriangularMesh.indexed (Array.fromList (List.reverse indexedState.vertices)) faceIndices)
+
+
+addIndexedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Point3d Meters coordinates)
+addIndexedTriangles vertexData frame ((Vertex p1 _ _) as firstVertex) vertices elements indexState faceIndices =
+    case vertices of
+        [ _ ] ->
+            case elements of
+                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                    addIndexedTriangles vertexData
+                        frame
+                        newFirstVertex
+                        remainingVertices
+                        remainingElements
+                        indexState
+                        faceIndices
+
+                [] ->
+                    Ok ( indexState, faceIndices )
+
+        (Vertex p2 _ _) :: remainingVertices ->
+            case remainingVertices of
+                (Vertex p3 _ _) :: _ ->
+                    let
+                        ( idx1, indexState1 ) =
+                            case Dict.get p1 indexState.indexMap of
+                                Just idx ->
+                                    ( idx, indexState )
+
+                                Nothing ->
+                                    ( indexState.maxIndex + 1
+                                    , { maxIndex = indexState.maxIndex + 1
+                                      , indexMap = Dict.insert p1 (indexState.maxIndex + 1) indexState.indexMap
+                                      , vertices =
+                                            case Array.get p1 vertexData.positions of
+                                                Just vertex ->
+                                                    Point3d.placeIn frame vertex :: indexState.vertices
+
+                                                Nothing ->
+                                                    -- TODO: Err "Index out of range"
+                                                    indexState.vertices
+                                      }
+                                    )
+
+                        ( idx2, indexState2 ) =
+                            case Dict.get p2 indexState1.indexMap of
+                                Just idx ->
+                                    ( idx, indexState1 )
+
+                                Nothing ->
+                                    ( indexState1.maxIndex + 1
+                                    , { maxIndex = indexState1.maxIndex + 1
+                                      , indexMap = Dict.insert p2 (indexState1.maxIndex + 1) indexState1.indexMap
+                                      , vertices =
+                                            case Array.get p2 vertexData.positions of
+                                                Just vertex ->
+                                                    Point3d.placeIn frame vertex :: indexState1.vertices
+
+                                                Nothing ->
+                                                    -- TODO: Err "Index out of range"
+                                                    indexState1.vertices
+                                      }
+                                    )
+
+                        ( idx3, indexState3 ) =
+                            case Dict.get p3 indexState2.indexMap of
+                                Just idx ->
+                                    ( idx, indexState2 )
+
+                                Nothing ->
+                                    ( indexState2.maxIndex + 1
+                                    , { maxIndex = indexState2.maxIndex + 1
+                                      , indexMap = Dict.insert p3 (indexState2.maxIndex + 1) indexState2.indexMap
+                                      , vertices =
+                                            case Array.get p3 vertexData.positions of
+                                                Just vertex ->
+                                                    Point3d.placeIn frame vertex :: indexState2.vertices
+
+                                                Nothing ->
+                                                    -- TODO: Err "Index out of range"
+                                                    indexState2.vertices
+                                      }
+                                    )
+                    in
+                    addIndexedTriangles vertexData
+                        frame
+                        firstVertex
+                        remainingVertices
+                        elements
+                        indexState3
+                        (( idx1, idx2, idx3 ) :: faceIndices)
+
+                _ ->
+                    Err "A face with less than three vertices"
+
+        _ ->
+            Err "A face with less than three vertices"
 
 
 addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (Point3d Meters coordinates)
@@ -555,13 +699,13 @@ addTriangles vertexData frame firstVertex vertices elements triangles_ =
                         Vertex p1 _ _ ->
                             let
                                 maybeV1 =
-                                    Array.get (p1 - 1) vertexData.positions
+                                    Array.get p1 vertexData.positions
 
                                 maybeV2 =
-                                    Array.get (p2 - 1) vertexData.positions
+                                    Array.get p2 vertexData.positions
 
                                 maybeV3 =
-                                    Array.get (p3 - 1) vertexData.positions
+                                    Array.get p3 vertexData.positions
                             in
                             case
                                 Maybe.map3
@@ -608,20 +752,20 @@ addFaces vertexData frame firstVertex vertices elements triangles_ =
                                 maybeV1 =
                                     Maybe.map2
                                         (\position normal -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal) })
-                                        (Array.get (p1 - 1) vertexData.positions)
-                                        (Array.get (n1 - 1) vertexData.normals)
+                                        (Array.get p1 vertexData.positions)
+                                        (Array.get n1 vertexData.normals)
 
                                 maybeV2 =
                                     Maybe.map2
                                         (\position normal -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal) })
-                                        (Array.get (p2 - 1) vertexData.positions)
-                                        (Array.get (n2 - 1) vertexData.normals)
+                                        (Array.get p2 vertexData.positions)
+                                        (Array.get n2 vertexData.normals)
 
                                 maybeV3 =
                                     Maybe.map2
                                         (\position normal -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal) })
-                                        (Array.get (p3 - 1) vertexData.positions)
-                                        (Array.get (n3 - 1) vertexData.normals)
+                                        (Array.get p3 vertexData.positions)
+                                        (Array.get n3 vertexData.normals)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
@@ -659,18 +803,18 @@ addTexturedTriangles vertexData frame firstVertex vertices elements triangles_ =
                             let
                                 maybeV1 =
                                     Maybe.map2 (\position uv -> { position = Point3d.placeIn frame position, uv = uv })
-                                        (Array.get (p1 - 1) vertexData.positions)
-                                        (Array.get (uv1 - 1) vertexData.uvs)
+                                        (Array.get p1 vertexData.positions)
+                                        (Array.get uv1 vertexData.uvs)
 
                                 maybeV2 =
                                     Maybe.map2 (\position uv -> { position = Point3d.placeIn frame position, uv = uv })
-                                        (Array.get (p2 - 1) vertexData.positions)
-                                        (Array.get (uv2 - 1) vertexData.uvs)
+                                        (Array.get p2 vertexData.positions)
+                                        (Array.get uv2 vertexData.uvs)
 
                                 maybeV3 =
                                     Maybe.map2 (\position uv -> { position = Point3d.placeIn frame position, uv = uv })
-                                        (Array.get (p3 - 1) vertexData.positions)
-                                        (Array.get (uv3 - 1) vertexData.uvs)
+                                        (Array.get p3 vertexData.positions)
+                                        (Array.get uv3 vertexData.uvs)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
@@ -709,23 +853,23 @@ addTexturedFaces vertexData frame firstVertex vertices elements triangles_ =
                                 maybeV1 =
                                     Maybe.map3
                                         (\position normal uv -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal), uv = uv })
-                                        (Array.get (p1 - 1) vertexData.positions)
-                                        (Array.get (n1 - 1) vertexData.normals)
-                                        (Array.get (uv1 - 1) vertexData.uvs)
+                                        (Array.get p1 vertexData.positions)
+                                        (Array.get n1 vertexData.normals)
+                                        (Array.get uv1 vertexData.uvs)
 
                                 maybeV2 =
                                     Maybe.map3
                                         (\position normal uv -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal), uv = uv })
-                                        (Array.get (p2 - 1) vertexData.positions)
-                                        (Array.get (n2 - 1) vertexData.normals)
-                                        (Array.get (uv2 - 1) vertexData.uvs)
+                                        (Array.get p2 vertexData.positions)
+                                        (Array.get n2 vertexData.normals)
+                                        (Array.get uv2 vertexData.uvs)
 
                                 maybeV3 =
                                     Maybe.map3
                                         (\position normal uv -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal), uv = uv })
-                                        (Array.get (p3 - 1) vertexData.positions)
-                                        (Array.get (n3 - 1) vertexData.normals)
-                                        (Array.get (uv3 - 1) vertexData.uvs)
+                                        (Array.get p3 vertexData.positions)
+                                        (Array.get n3 vertexData.normals)
+                                        (Array.get uv3 vertexData.uvs)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
@@ -892,13 +1036,16 @@ parseVertices list vertices =
         first :: more ->
             case List.map String.toInt (String.split "/" first) of
                 [ Just p ] ->
-                    parseVertices more (Vertex p Nothing Nothing :: vertices)
+                    parseVertices more
+                        (Vertex (p - 1) Nothing Nothing :: vertices)
 
-                [ Just p, uv ] ->
-                    parseVertices more (Vertex p uv Nothing :: vertices)
+                [ Just p, Just uv ] ->
+                    parseVertices more
+                        (Vertex (p - 1) (Just (uv - 1)) Nothing :: vertices)
 
-                [ Just p, uv, n ] ->
-                    parseVertices more (Vertex p uv n :: vertices)
+                [ Just p, uv, Just n ] ->
+                    parseVertices more
+                        (Vertex (p - 1) (Maybe.map (\x -> x - 1) uv) (Just (n - 1)) :: vertices)
 
                 _ ->
                     Err "Invalid face format"
