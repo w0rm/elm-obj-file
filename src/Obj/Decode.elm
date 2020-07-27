@@ -58,7 +58,7 @@ Note that all primitive decoders require at least one face and will fail if no f
 
 -}
 
-import Array exposing (Array)
+import Array exposing (Array, indexedMap)
 import Dict exposing (Dict)
 import Direction3d exposing (Direction3d)
 import Frame3d exposing (Frame3d)
@@ -416,7 +416,7 @@ but it was exported with Y-up:
 -}
 trianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh (Point3d Meters coordinates))
 trianglesIn frame =
-    Decoder (\vertexData elements -> indexedTriangularMesh (addIndexedTriangles vertexData frame) elements initialIndexedState [])
+    Decoder (\vertexData elements -> indexedTriangularMesh (addIndexedTriangles vertexData frame) elements initialIndexState [])
 
 
 {-| -}
@@ -536,15 +536,15 @@ triangularMesh add elementGroups triangles_ =
                 Ok (TriangularMesh.triangles triangles_)
 
 
-type alias IndexedState a =
+type alias IndexState a =
     { maxIndex : Int
     , indexMap : Dict Int Int
     , vertices : List a
     }
 
 
-initialIndexedState : IndexedState a
-initialIndexedState =
+initialIndexState : IndexState a
+initialIndexState =
     { maxIndex = -1
     , indexMap = Dict.empty
     , vertices = []
@@ -556,17 +556,19 @@ initialIndexedState =
 type alias AddIndexedTriangles a =
     List Vertex
     -> List Element
-    -> IndexedState a
+    -> Int
+    -> Dict Int Int
+    -> List a
     -> List Int
     -> List ( Int, Int, Int )
-    -> Result String ( IndexedState a, List ( Int, Int, Int ) )
+    -> Result String ( IndexState a, List ( Int, Int, Int ) )
 
 
-indexedTriangularMesh : AddIndexedTriangles a -> List ElementGroup -> IndexedState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
-indexedTriangularMesh add elementGroups indexedState faceIndices =
+indexedTriangularMesh : AddIndexedTriangles a -> List ElementGroup -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
+indexedTriangularMesh add elementGroups { maxIndex, indexMap, vertices } faceIndices =
     case elementGroups of
         ( _, firstElement, remainingElements ) :: remainingElementGroups ->
-            case add firstElement remainingElements indexedState [] faceIndices of
+            case add firstElement remainingElements maxIndex indexMap vertices [] faceIndices of
                 Ok ( newIndexedState, newFaceIndices ) ->
                     indexedTriangularMesh add remainingElementGroups newIndexedState newFaceIndices
 
@@ -578,12 +580,12 @@ indexedTriangularMesh add elementGroups indexedState faceIndices =
                 Err "No faces found"
 
             else
-                Ok (TriangularMesh.indexed (Array.fromList (List.reverse indexedState.vertices)) faceIndices)
+                Ok (TriangularMesh.indexed (Array.fromList (List.reverse vertices)) faceIndices)
 
 
 addIndexedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Point3d Meters coordinates)
-addIndexedTriangles vertexData frame vertices elements indexState indices faceIndices =
-    case vertices of
+addIndexedTriangles vertexData frame element elements maxIndex indexMap vertices indices faceIndices =
+    case element of
         [] ->
             case indices of
                 p1 :: remainingIndices ->
@@ -597,25 +599,29 @@ addIndexedTriangles vertexData frame vertices elements indexState indices faceIn
                                 frame
                                 elementVertices
                                 remainingElements
-                                indexState
+                                maxIndex
+                                indexMap
+                                vertices
                                 []
                                 newFaceIndices
 
                         [] ->
-                            Ok ( indexState, newFaceIndices )
+                            Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
 
                 _ ->
                     -- the number of vertices is guaranteed in the parser
-                    Ok ( indexState, faceIndices )
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, faceIndices )
 
         (Vertex p _ _) :: remainingVertices ->
-            case Dict.get p indexState.indexMap of
+            case Dict.get p indexMap of
                 Just idx ->
                     addIndexedTriangles vertexData
                         frame
                         remainingVertices
                         elements
-                        indexState
+                        maxIndex
+                        indexMap
+                        vertices
                         (idx :: indices)
                         faceIndices
 
@@ -626,11 +632,10 @@ addIndexedTriangles vertexData frame vertices elements indexState indices faceIn
                                 frame
                                 remainingVertices
                                 elements
-                                { maxIndex = indexState.maxIndex + 1
-                                , indexMap = Dict.insert p (indexState.maxIndex + 1) indexState.indexMap
-                                , vertices = Point3d.placeIn frame vertex :: indexState.vertices
-                                }
-                                (indexState.maxIndex + 1 :: indices)
+                                (maxIndex + 1)
+                                (Dict.insert p (maxIndex + 1) indexMap)
+                                (Point3d.placeIn frame vertex :: vertices)
+                                (maxIndex + 1 :: indices)
                                 faceIndices
 
                         Nothing ->
@@ -650,62 +655,6 @@ groupIndices p1 more result =
 
         [] ->
             result
-
-
-addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (Point3d Meters coordinates)
-addTriangles vertexData frame firstVertex vertices elements triangles_ =
-    case vertices of
-        [ _ ] ->
-            case elements of
-                (newFirstVertex :: remainingVertices) :: remainingElements ->
-                    addTriangles vertexData
-                        frame
-                        newFirstVertex
-                        remainingVertices
-                        remainingElements
-                        triangles_
-
-                _ ->
-                    Ok triangles_
-
-        (Vertex p2 _ _) :: remainingVertices ->
-            case remainingVertices of
-                (Vertex p3 _ _) :: _ ->
-                    case firstVertex of
-                        Vertex p1 _ _ ->
-                            let
-                                maybeV1 =
-                                    Array.get p1 vertexData.positions
-
-                                maybeV2 =
-                                    Array.get p2 vertexData.positions
-
-                                maybeV3 =
-                                    Array.get p3 vertexData.positions
-                            in
-                            case
-                                Maybe.map3
-                                    (\v1 v2 v3 ->
-                                        ( Point3d.placeIn frame v1
-                                        , Point3d.placeIn frame v2
-                                        , Point3d.placeIn frame v3
-                                        )
-                                    )
-                                    maybeV1
-                                    maybeV2
-                                    maybeV3
-                            of
-                                Just triangle ->
-                                    addTriangles vertexData frame firstVertex remainingVertices elements (triangle :: triangles_)
-
-                                Nothing ->
-                                    Err "Index out of range"
-
-                _ ->
-                    Err "A face with less than three vertices"
-
-        _ ->
-            Err "A face with less than three vertices"
 
 
 addFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (Face coordinates)
