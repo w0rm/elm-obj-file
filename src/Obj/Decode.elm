@@ -474,8 +474,8 @@ type alias VertexData =
     }
 
 
-type Element
-    = Element Vertex (List Vertex)
+type alias Element =
+    List Vertex
 
 
 type Vertex
@@ -517,13 +517,16 @@ triangularMesh add elementGroups triangles_ =
     case elementGroups of
         ( _, firstElement, remainingElements ) :: remainingElementGroups ->
             case firstElement of
-                Element vertex remainingVertices ->
+                vertex :: remainingVertices ->
                     case add vertex remainingVertices remainingElements triangles_ of
                         Ok newTriangles ->
                             triangularMesh add remainingElementGroups newTriangles
 
                         Err error ->
                             Err error
+
+                [] ->
+                    Err "A face with less than three vertices"
 
         [] ->
             if triangles_ == [] then
@@ -551,10 +554,10 @@ initialIndexedState =
 {-| Defines a function that knows how to collect a certain kind of triangle
 -}
 type alias AddIndexedTriangles a =
-    Vertex
-    -> List Vertex
+    List Vertex
     -> List Element
     -> IndexedState a
+    -> List Int
     -> List ( Int, Int, Int )
     -> Result String ( IndexedState a, List ( Int, Int, Int ) )
 
@@ -563,14 +566,12 @@ indexedTriangularMesh : AddIndexedTriangles a -> List ElementGroup -> IndexedSta
 indexedTriangularMesh add elementGroups indexedState faceIndices =
     case elementGroups of
         ( _, firstElement, remainingElements ) :: remainingElementGroups ->
-            case firstElement of
-                Element vertex remainingVertices ->
-                    case add vertex remainingVertices remainingElements indexedState faceIndices of
-                        Ok ( newIndexedState, newFaceIndices ) ->
-                            indexedTriangularMesh add remainingElementGroups newIndexedState newFaceIndices
+            case add firstElement remainingElements indexedState [] faceIndices of
+                Ok ( newIndexedState, newFaceIndices ) ->
+                    indexedTriangularMesh add remainingElementGroups newIndexedState newFaceIndices
 
-                        Err error ->
-                            Err error
+                Err error ->
+                    Err error
 
         [] ->
             if faceIndices == [] then
@@ -581,99 +582,74 @@ indexedTriangularMesh add elementGroups indexedState faceIndices =
 
 
 addIndexedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Point3d Meters coordinates)
-addIndexedTriangles vertexData frame ((Vertex p1 _ _) as firstVertex) vertices elements indexState faceIndices =
+addIndexedTriangles vertexData frame vertices elements indexState indices faceIndices =
     case vertices of
-        [ _ ] ->
-            case elements of
-                (Element newFirstVertex remainingVertices) :: remainingElements ->
-                    addIndexedTriangles vertexData
-                        frame
-                        newFirstVertex
-                        remainingVertices
-                        remainingElements
-                        indexState
-                        faceIndices
-
-                [] ->
-                    Ok ( indexState, faceIndices )
-
-        (Vertex p2 _ _) :: remainingVertices ->
-            case remainingVertices of
-                (Vertex p3 _ _) :: _ ->
+        [] ->
+            case indices of
+                p1 :: remainingIndices ->
                     let
-                        ( idx1, indexState1 ) =
-                            case Dict.get p1 indexState.indexMap of
-                                Just idx ->
-                                    ( idx, indexState )
-
-                                Nothing ->
-                                    ( indexState.maxIndex + 1
-                                    , { maxIndex = indexState.maxIndex + 1
-                                      , indexMap = Dict.insert p1 (indexState.maxIndex + 1) indexState.indexMap
-                                      , vertices =
-                                            case Array.get p1 vertexData.positions of
-                                                Just vertex ->
-                                                    Point3d.placeIn frame vertex :: indexState.vertices
-
-                                                Nothing ->
-                                                    -- TODO: Err "Index out of range"
-                                                    indexState.vertices
-                                      }
-                                    )
-
-                        ( idx2, indexState2 ) =
-                            case Dict.get p2 indexState1.indexMap of
-                                Just idx ->
-                                    ( idx, indexState1 )
-
-                                Nothing ->
-                                    ( indexState1.maxIndex + 1
-                                    , { maxIndex = indexState1.maxIndex + 1
-                                      , indexMap = Dict.insert p2 (indexState1.maxIndex + 1) indexState1.indexMap
-                                      , vertices =
-                                            case Array.get p2 vertexData.positions of
-                                                Just vertex ->
-                                                    Point3d.placeIn frame vertex :: indexState1.vertices
-
-                                                Nothing ->
-                                                    -- TODO: Err "Index out of range"
-                                                    indexState1.vertices
-                                      }
-                                    )
-
-                        ( idx3, indexState3 ) =
-                            case Dict.get p3 indexState2.indexMap of
-                                Just idx ->
-                                    ( idx, indexState2 )
-
-                                Nothing ->
-                                    ( indexState2.maxIndex + 1
-                                    , { maxIndex = indexState2.maxIndex + 1
-                                      , indexMap = Dict.insert p3 (indexState2.maxIndex + 1) indexState2.indexMap
-                                      , vertices =
-                                            case Array.get p3 vertexData.positions of
-                                                Just vertex ->
-                                                    Point3d.placeIn frame vertex :: indexState2.vertices
-
-                                                Nothing ->
-                                                    -- TODO: Err "Index out of range"
-                                                    indexState2.vertices
-                                      }
-                                    )
+                        newFaceIndices =
+                            groupIndices p1 remainingIndices faceIndices
                     in
-                    addIndexedTriangles vertexData
-                        frame
-                        firstVertex
-                        remainingVertices
-                        elements
-                        indexState3
-                        (( idx1, idx2, idx3 ) :: faceIndices)
+                    case elements of
+                        elementVertices :: remainingElements ->
+                            addIndexedTriangles vertexData
+                                frame
+                                elementVertices
+                                remainingElements
+                                indexState
+                                []
+                                newFaceIndices
+
+                        [] ->
+                            Ok ( indexState, newFaceIndices )
 
                 _ ->
-                    Err "A face with less than three vertices"
+                    -- the number of vertices is guaranteed in the parser
+                    Ok ( indexState, faceIndices )
 
-        _ ->
-            Err "A face with less than three vertices"
+        (Vertex p _ _) :: remainingVertices ->
+            case Dict.get p indexState.indexMap of
+                Just idx ->
+                    addIndexedTriangles vertexData
+                        frame
+                        remainingVertices
+                        elements
+                        indexState
+                        (idx :: indices)
+                        faceIndices
+
+                Nothing ->
+                    case Array.get p vertexData.positions of
+                        Just vertex ->
+                            addIndexedTriangles vertexData
+                                frame
+                                remainingVertices
+                                elements
+                                { maxIndex = indexState.maxIndex + 1
+                                , indexMap = Dict.insert p (indexState.maxIndex + 1) indexState.indexMap
+                                , vertices = Point3d.placeIn frame vertex :: indexState.vertices
+                                }
+                                (indexState.maxIndex + 1 :: indices)
+                                faceIndices
+
+                        Nothing ->
+                            Err "Index out of range"
+
+
+groupIndices : Int -> List Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )
+groupIndices p1 more result =
+    case more of
+        p2 :: rest ->
+            case rest of
+                p3 :: _ ->
+                    groupIndices p1 rest (( p1, p2, p3 ) :: result)
+
+                _ ->
+                    result
+
+        [] ->
+            result
 
 
 addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (Point3d Meters coordinates)
@@ -681,7 +657,7 @@ addTriangles vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
-                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
                     addTriangles vertexData
                         frame
                         newFirstVertex
@@ -689,7 +665,7 @@ addTriangles vertexData frame firstVertex vertices elements triangles_ =
                         remainingElements
                         triangles_
 
-                [] ->
+                _ ->
                     Ok triangles_
 
         (Vertex p2 _ _) :: remainingVertices ->
@@ -737,11 +713,11 @@ addFaces vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
-                [] ->
-                    Ok triangles_
-
-                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
                     addFaces vertexData frame newFirstVertex remainingVertices remainingElements triangles_
+
+                _ ->
+                    Ok triangles_
 
         (Vertex p2 _ (Just n2)) :: remainingVertices ->
             case remainingVertices of
@@ -789,10 +765,10 @@ addTexturedTriangles vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
-                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
                     addTexturedTriangles vertexData frame newFirstVertex remainingVertices remainingElements triangles_
 
-                [] ->
+                _ ->
                     Ok triangles_
 
         (Vertex p2 (Just uv2) _) :: remainingVertices ->
@@ -838,10 +814,10 @@ addTexturedFaces vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
-                (Element newFirstVertex remainingVertices) :: remainingElements ->
+                (newFirstVertex :: remainingVertices) :: remainingElements ->
                     addTexturedFaces vertexData frame newFirstVertex remainingVertices remainingElements triangles_
 
-                [] ->
+                _ ->
                     Ok triangles_
 
         (Vertex p2 (Just uv2) (Just n2)) :: remainingVertices ->
@@ -1020,8 +996,8 @@ parseLine units line =
             Ok [ _, _ ] ->
                 Error "Face has less than three vertices"
 
-            Ok (first :: vertices) ->
-                ElementData (Element first vertices)
+            Ok vertices ->
+                ElementData vertices
 
             Err err ->
                 Error err
