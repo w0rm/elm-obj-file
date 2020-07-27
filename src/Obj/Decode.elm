@@ -5,8 +5,9 @@ module Obj.Decode exposing
     , object, group, defaultGroup, material
     , objectNames, groupNames, materialNames
     , map, map2, map3, map4, map5
-    , oneOf, fail, succeed, andThen, combine
+    , filter, oneOf, fail, succeed, andThen, combine
     , ObjCoordinates
+    , facesIn, texturedFacesIn, texturedTrianglesIn, trianglesIn
     )
 
 {-|
@@ -58,6 +59,8 @@ Note that all primitive decoders require at least one face and will fail if no f
 -}
 
 import Array exposing (Array)
+import Direction3d exposing (Direction3d)
+import Frame3d exposing (Frame3d)
 import Length exposing (Length, Meters)
 import Point3d exposing (Point3d)
 import Quantity exposing (Unitless)
@@ -77,14 +80,14 @@ type Decoder a
 -}
 triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
 triangles =
-    Decoder (\vertexData elements -> triangularMesh (addTriangles vertexData) elements [])
+    trianglesIn Frame3d.atOrigin
 
 
 {-| Decode positions and normals. Use with `Scene3d.Mesh.indexedFaces`.
 -}
 faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
 faces =
-    Decoder (\vertexData elements -> triangularMesh (addFaces vertexData) elements [])
+    facesIn Frame3d.atOrigin
 
 
 {-| Decode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
@@ -92,14 +95,14 @@ Use with `Scene3d.Mesh.texturedTriangles` or `Scene3d.Mesh.texturedFacets`.
 -}
 texturedTriangles : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
 texturedTriangles =
-    Decoder (\vertexData elements -> triangularMesh (addTexturedTriangles vertexData) elements [])
+    texturedTrianglesIn Frame3d.atOrigin
 
 
 {-| Decode positions, UV and normals. Use with `Scene3d.Mesh.texturedFaces`.
 -}
 texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
 texturedFaces =
-    Decoder (\vertexData elements -> triangularMesh (addTexturedFaces vertexData) elements [])
+    texturedFacesIn Frame3d.atOrigin
 
 
 
@@ -297,22 +300,26 @@ filter fn (Decoder decoder) =
 -}
 oneOf : List (Decoder a) -> Decoder a
 oneOf decoders =
-    Decoder (\vertexData elements -> oneOfHelp vertexData elements decoders)
+    Decoder (\vertexData elements -> oneOfHelp vertexData elements decoders [])
 
 
-oneOfHelp : VertexData -> List ElementGroup -> List (Decoder a) -> Result String a
-oneOfHelp vertexData elements decoders =
+oneOfHelp : VertexData -> List ElementGroup -> List (Decoder a) -> List String -> Result String a
+oneOfHelp vertexData elements decoders errors =
     case decoders of
         [] ->
-            Err "Failed oneOf"
+            if errors == [] then
+                Err "Empty oneOf decoder"
+
+            else
+                Err ("Failed oneOf decoder: '" ++ String.join "', '" (List.reverse errors) ++ "'.")
 
         (Decoder decoder) :: remainingDecoders ->
             case decoder vertexData elements of
                 Ok res ->
                     Ok res
 
-                Err _ ->
-                    oneOfHelp vertexData elements remainingDecoders
+                Err error ->
+                    oneOfHelp vertexData elements remainingDecoders (error :: errors)
 
 
 {-| A decoder that always succeeds with the result. May be useful in combination with `oneOf` to
@@ -395,25 +402,59 @@ type ObjCoordinates
     = ObjCoordinates
 
 
+{-| Transform coordinates when decoding. For example, if you need to render a mesh with Z-up,
+but it was exported with Y-up:
+
+    yUpToZUpFrame =
+        Frame3d.atOrigin
+            |> Frame3d.rotateAround Axis3d.x (Angle.degrees 90)
+
+    yUpToZUpTriangles =
+        trianglesIn yUpToZUpFrame
+
+-}
+trianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh (Point3d Meters coordinates))
+trianglesIn frame =
+    Decoder (\vertexData elements -> triangularMesh (addTriangles vertexData frame) elements [])
+
+
+{-| -}
+facesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates })
+facesIn frame =
+    Decoder (\vertexData elements -> triangularMesh (addFaces vertexData frame) elements [])
+
+
+{-| -}
+texturedTrianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, uv : ( Float, Float ) })
+texturedTrianglesIn frame =
+    Decoder (\vertexData elements -> triangularMesh (addTexturedTriangles vertexData frame) elements [])
+
+
+{-| -}
+texturedFacesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) })
+texturedFacesIn frame =
+    Decoder (\vertexData elements -> triangularMesh (addTexturedFaces vertexData frame) elements [])
+
+
 
 -- Internals
 
 
-type alias Face =
-    { position : Point3d Meters ObjCoordinates
-    , normal : Vector3d Unitless ObjCoordinates
+type alias Face coordinates =
+    { position : Point3d Meters coordinates
+    , normal : Vector3d Unitless coordinates
     }
 
 
-type alias TexturedTriangle =
-    { position : Point3d Meters ObjCoordinates
+type alias TexturedTriangle coordinates =
+    { position : Point3d Meters coordinates
     , uv : ( Float, Float )
     }
 
 
-type alias TexturedFace =
-    { position : Point3d Meters ObjCoordinates
-    , normal : Vector3d Unitless ObjCoordinates
+type alias TexturedFace coordinates =
+    { position : Point3d Meters coordinates
+    , normal : Vector3d Unitless coordinates
     , uv : ( Float, Float )
     }
 
@@ -427,7 +468,7 @@ type alias GroupProperties =
 
 type alias VertexData =
     { positions : Array (Point3d Meters ObjCoordinates)
-    , normals : Array (Vector3d Unitless ObjCoordinates)
+    , normals : Array (Direction3d ObjCoordinates)
     , uvs : Array ( Float, Float )
     }
 
@@ -453,7 +494,7 @@ type PropertyType
 type Line
     = Property PropertyType
     | PositionData (Point3d Meters ObjCoordinates)
-    | NormalData (Vector3d Unitless ObjCoordinates)
+    | NormalData (Direction3d ObjCoordinates)
     | UvData ( Float, Float )
     | ElementData Element
     | Error String
@@ -491,13 +532,14 @@ type alias AddTriangles a =
     -> Result String (List ( a, a, a ))
 
 
-addTriangles : VertexData -> AddTriangles (Point3d Meters ObjCoordinates)
-addTriangles vertexData firstVertex vertices elements triangles_ =
+addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (Point3d Meters coordinates)
+addTriangles vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
                 (Element newFirstVertex remainingVertices) :: remainingElements ->
                     addTriangles vertexData
+                        frame
                         newFirstVertex
                         remainingVertices
                         remainingElements
@@ -521,9 +563,20 @@ addTriangles vertexData firstVertex vertices elements triangles_ =
                                 maybeV3 =
                                     Array.get (p3 - 1) vertexData.positions
                             in
-                            case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
+                            case
+                                Maybe.map3
+                                    (\v1 v2 v3 ->
+                                        ( Point3d.placeIn frame v1
+                                        , Point3d.placeIn frame v2
+                                        , Point3d.placeIn frame v3
+                                        )
+                                    )
+                                    maybeV1
+                                    maybeV2
+                                    maybeV3
+                            of
                                 Just triangle ->
-                                    addTriangles vertexData firstVertex remainingVertices elements (triangle :: triangles_)
+                                    addTriangles vertexData frame firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Index out of range"
@@ -535,8 +588,8 @@ addTriangles vertexData firstVertex vertices elements triangles_ =
             Err "A face with less than three vertices"
 
 
-addFaces : VertexData -> AddTriangles Face
-addFaces vertexData firstVertex vertices elements triangles_ =
+addFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (Face coordinates)
+addFaces vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
@@ -544,7 +597,7 @@ addFaces vertexData firstVertex vertices elements triangles_ =
                     Ok triangles_
 
                 (Element newFirstVertex remainingVertices) :: remainingElements ->
-                    addFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
+                    addFaces vertexData frame newFirstVertex remainingVertices remainingElements triangles_
 
         (Vertex p2 _ (Just n2)) :: remainingVertices ->
             case remainingVertices of
@@ -553,17 +606,26 @@ addFaces vertexData firstVertex vertices elements triangles_ =
                         Vertex p1 _ (Just n1) ->
                             let
                                 maybeV1 =
-                                    Maybe.map2 Face (Array.get (p1 - 1) vertexData.positions) (Array.get (n1 - 1) vertexData.normals)
+                                    Maybe.map2
+                                        (\position normal -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal) })
+                                        (Array.get (p1 - 1) vertexData.positions)
+                                        (Array.get (n1 - 1) vertexData.normals)
 
                                 maybeV2 =
-                                    Maybe.map2 Face (Array.get (p2 - 1) vertexData.positions) (Array.get (n2 - 1) vertexData.normals)
+                                    Maybe.map2
+                                        (\position normal -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal) })
+                                        (Array.get (p2 - 1) vertexData.positions)
+                                        (Array.get (n2 - 1) vertexData.normals)
 
                                 maybeV3 =
-                                    Maybe.map2 Face (Array.get (p3 - 1) vertexData.positions) (Array.get (n3 - 1) vertexData.normals)
+                                    Maybe.map2
+                                        (\position normal -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal) })
+                                        (Array.get (p3 - 1) vertexData.positions)
+                                        (Array.get (n3 - 1) vertexData.normals)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    addFaces vertexData firstVertex remainingVertices elements (triangle :: triangles_)
+                                    addFaces vertexData frame firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Index out of range"
@@ -578,13 +640,13 @@ addFaces vertexData firstVertex vertices elements triangles_ =
             Err "Vertex has no normal vector"
 
 
-addTexturedTriangles : VertexData -> AddTriangles TexturedTriangle
-addTexturedTriangles vertexData firstVertex vertices elements triangles_ =
+addTexturedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (TexturedTriangle coordinates)
+addTexturedTriangles vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
                 (Element newFirstVertex remainingVertices) :: remainingElements ->
-                    addTexturedTriangles vertexData newFirstVertex remainingVertices remainingElements triangles_
+                    addTexturedTriangles vertexData frame newFirstVertex remainingVertices remainingElements triangles_
 
                 [] ->
                     Ok triangles_
@@ -596,17 +658,23 @@ addTexturedTriangles vertexData firstVertex vertices elements triangles_ =
                         Vertex p1 (Just uv1) _ ->
                             let
                                 maybeV1 =
-                                    Maybe.map2 TexturedTriangle (Array.get (p1 - 1) vertexData.positions) (Array.get (uv1 - 1) vertexData.uvs)
+                                    Maybe.map2 (\position uv -> { position = Point3d.placeIn frame position, uv = uv })
+                                        (Array.get (p1 - 1) vertexData.positions)
+                                        (Array.get (uv1 - 1) vertexData.uvs)
 
                                 maybeV2 =
-                                    Maybe.map2 TexturedTriangle (Array.get (p2 - 1) vertexData.positions) (Array.get (uv2 - 1) vertexData.uvs)
+                                    Maybe.map2 (\position uv -> { position = Point3d.placeIn frame position, uv = uv })
+                                        (Array.get (p2 - 1) vertexData.positions)
+                                        (Array.get (uv2 - 1) vertexData.uvs)
 
                                 maybeV3 =
-                                    Maybe.map2 TexturedTriangle (Array.get (p3 - 1) vertexData.positions) (Array.get (uv3 - 1) vertexData.uvs)
+                                    Maybe.map2 (\position uv -> { position = Point3d.placeIn frame position, uv = uv })
+                                        (Array.get (p3 - 1) vertexData.positions)
+                                        (Array.get (uv3 - 1) vertexData.uvs)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    addTexturedTriangles vertexData firstVertex remainingVertices elements (triangle :: triangles_)
+                                    addTexturedTriangles vertexData frame firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Index out of range"
@@ -621,13 +689,13 @@ addTexturedTriangles vertexData firstVertex vertices elements triangles_ =
             Err "Vertex has no texture coordinates"
 
 
-addTexturedFaces : VertexData -> AddTriangles TexturedFace
-addTexturedFaces vertexData firstVertex vertices elements triangles_ =
+addTexturedFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddTriangles (TexturedFace coordinates)
+addTexturedFaces vertexData frame firstVertex vertices elements triangles_ =
     case vertices of
         [ _ ] ->
             case elements of
                 (Element newFirstVertex remainingVertices) :: remainingElements ->
-                    addTexturedFaces vertexData newFirstVertex remainingVertices remainingElements triangles_
+                    addTexturedFaces vertexData frame newFirstVertex remainingVertices remainingElements triangles_
 
                 [] ->
                     Ok triangles_
@@ -639,17 +707,29 @@ addTexturedFaces vertexData firstVertex vertices elements triangles_ =
                         Vertex p1 (Just uv1) (Just n1) ->
                             let
                                 maybeV1 =
-                                    Maybe.map3 TexturedFace (Array.get (p1 - 1) vertexData.positions) (Array.get (n1 - 1) vertexData.normals) (Array.get (uv1 - 1) vertexData.uvs)
+                                    Maybe.map3
+                                        (\position normal uv -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal), uv = uv })
+                                        (Array.get (p1 - 1) vertexData.positions)
+                                        (Array.get (n1 - 1) vertexData.normals)
+                                        (Array.get (uv1 - 1) vertexData.uvs)
 
                                 maybeV2 =
-                                    Maybe.map3 TexturedFace (Array.get (p2 - 1) vertexData.positions) (Array.get (n2 - 1) vertexData.normals) (Array.get (uv2 - 1) vertexData.uvs)
+                                    Maybe.map3
+                                        (\position normal uv -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal), uv = uv })
+                                        (Array.get (p2 - 1) vertexData.positions)
+                                        (Array.get (n2 - 1) vertexData.normals)
+                                        (Array.get (uv2 - 1) vertexData.uvs)
 
                                 maybeV3 =
-                                    Maybe.map3 TexturedFace (Array.get (p3 - 1) vertexData.positions) (Array.get (n3 - 1) vertexData.normals) (Array.get (uv3 - 1) vertexData.uvs)
+                                    Maybe.map3
+                                        (\position normal uv -> { position = Point3d.placeIn frame position, normal = Direction3d.toVector (Direction3d.placeIn frame normal), uv = uv })
+                                        (Array.get (p3 - 1) vertexData.positions)
+                                        (Array.get (n3 - 1) vertexData.normals)
+                                        (Array.get (uv3 - 1) vertexData.uvs)
                             in
                             case Maybe.map3 (\v1 v2 v3 -> ( v1, v2, v3 )) maybeV1 maybeV2 maybeV3 of
                                 Just triangle ->
-                                    addTexturedFaces vertexData firstVertex remainingVertices elements (triangle :: triangles_)
+                                    addTexturedFaces vertexData frame firstVertex remainingVertices elements (triangle :: triangles_)
 
                                 Nothing ->
                                     Err "Index out of range"
@@ -669,7 +749,7 @@ decodeHelp :
     -> (VertexData -> List ElementGroup -> Result String a)
     -> List String
     -> List (Point3d Meters ObjCoordinates)
-    -> List (Vector3d Unitless ObjCoordinates)
+    -> List (Direction3d ObjCoordinates)
     -> List ( Float, Float )
     -> List ElementGroup
     -> Maybe String
@@ -780,7 +860,7 @@ parseLine units line =
     else if String.startsWith "vn " line then
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
             [ Just x, Just y, Just z ] ->
-                NormalData (Vector3d.unitless x y z)
+                NormalData (Direction3d.unsafe { x = x, y = y, z = z })
 
             _ ->
                 Error "Invalid normal vector format"
