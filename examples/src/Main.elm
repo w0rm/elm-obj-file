@@ -6,27 +6,97 @@ import Browser
 import Camera3d
 import Color exposing (Color)
 import Direction3d
+import Frame3d exposing (Frame3d)
 import Html exposing (Html)
-import Length
+import Length exposing (Meters)
 import Meshes.Pod
-import Obj.Decode exposing (ObjCoordinates)
+import Obj.Decode exposing (Decoder, ObjCoordinates)
 import Pixels
 import Point3d
 import Scene3d
 import Scene3d.Material exposing (Texture)
-import Scene3d.Mesh exposing (Textured)
+import Scene3d.Mesh exposing (Shadow, Textured)
 import Task
 import TriangularMesh
 import Viewpoint3d
 import WebGL.Texture
 
 
-mesh : Textured ObjCoordinates
-mesh =
+meshParts : Decoder a -> Decoder a
+meshParts =
+    Obj.Decode.filter
+        (\{ object } ->
+            case object of
+                Just o ->
+                    List.member o
+                        [ "pod_Cube.001"
+                        , "Wheel.front.L_Cylinder"
+                        , "Wheel.front.R_Cylinder.006"
+                        , "Wheel.rear.L_Cylinder.005"
+                        , "Wheel.rear.R_Cylinder.007"
+                        , "lid-left_Cube.002"
+                        , "right_lid_Cube.003"
+                        , "swivel_Cube"
+
+                        --, "PlasmaTurret_Cube.010"
+                        --, "Laser_Cube.007"
+                        --, "Launcher_Cube.009"
+                        , "TeslaGun_Cube.008"
+                        ]
+
+                Nothing ->
+                    False
+        )
+
+
+shadowParts : Decoder a -> Decoder a
+shadowParts =
+    Obj.Decode.filter
+        (\{ object } ->
+            case object of
+                Just o ->
+                    List.member o
+                        [ "pod_Cube.001"
+                        , "Wheel.front.L_Cylinder"
+                        , "Wheel.front.R_Cylinder.006"
+                        , "Wheel.rear.L_Cylinder.005"
+                        , "Wheel.rear.R_Cylinder.007"
+                        ]
+
+                Nothing ->
+                    False
+        )
+
+
+type MeshCoordinates
+    = MeshCoordinates
+
+
+yUpToZUpFrame : Frame3d Meters MeshCoordinates { defines : ObjCoordinates }
+yUpToZUpFrame =
+    Frame3d.atOrigin
+        |> Frame3d.rotateAround Axis3d.x (Angle.degrees 90)
+
+
+pod : { mesh : Textured MeshCoordinates, shadow : Shadow MeshCoordinates }
+pod =
+    let
+        decoder =
+            Obj.Decode.map2
+                (\mesh shadow ->
+                    { mesh = Scene3d.Mesh.texturedFaces mesh
+                    , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.indexedTriangles shadow)
+                    }
+                )
+                (meshParts (Obj.Decode.texturedFacesIn yUpToZUpFrame))
+                (shadowParts (Obj.Decode.trianglesIn yUpToZUpFrame))
+    in
     Meshes.Pod.obj
-        |> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces
-        |> Result.withDefault TriangularMesh.empty
-        |> Scene3d.Mesh.texturedFaces
+        |> Obj.Decode.decodeString Length.meters decoder
+        |> Result.withDefault
+            { mesh = Scene3d.Mesh.texturedFaces TriangularMesh.empty
+            , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.texturedFaces TriangularMesh.empty)
+            }
 
 
 type alias Model =
@@ -58,7 +128,7 @@ view model =
             Camera3d.perspective
                 { viewpoint =
                     Viewpoint3d.orbitZ
-                        { focalPoint = Point3d.meters 0 0 0
+                        { focalPoint = Point3d.meters -0.5 0.5 0
                         , azimuth = Angle.degrees -45
                         , elevation = Angle.degrees 35
                         , distance = Length.meters 16
@@ -74,22 +144,21 @@ view model =
             Scene3d.sunny
                 { upDirection = Direction3d.z
                 , sunlightDirection = Direction3d.negativeZ
-                , shadows = False
+                , shadows = True
                 , camera = camera
                 , dimensions = ( Pixels.int 640, Pixels.int 640 )
                 , background = Scene3d.transparentBackground
                 , clipDepth = Length.meters 0.1
                 , entities =
-                    [ Scene3d.rotateAround Axis3d.x
-                        (Angle.degrees 90)
-                        (Scene3d.mesh
-                            (Scene3d.Material.texturedNonmetal
-                                { baseColor = texture
-                                , roughness = Scene3d.Material.constant 1
-                                }
-                            )
-                            mesh
-                        )
+                    [ Scene3d.meshWithShadow
+                        (Scene3d.Material.texturedMatte texture)
+                        pod.mesh
+                        pod.shadow
+                    , Scene3d.quad (Scene3d.Material.matte Color.blue)
+                        (Point3d.meters -5 5 0)
+                        (Point3d.meters 5 5 0)
+                        (Point3d.meters 5 -5 0)
+                        (Point3d.meters -5 -5 0)
                     ]
                 }
 
