@@ -37,16 +37,23 @@ meshParts =
                         , "lid-left_Cube.002"
                         , "right_lid_Cube.003"
                         , "swivel_Cube"
-
-                        --, "PlasmaTurret_Cube.010"
-                        --, "Laser_Cube.007"
-                        --, "Launcher_Cube.009"
-                        , "TeslaGun_Cube.008"
                         ]
 
                 Nothing ->
                     False
         )
+
+
+guns : Decoder a -> Decoder (List a)
+guns decoder =
+    [ "PlasmaTurret_Cube.010"
+    , "Laser_Cube.007"
+    , "Launcher_Cube.009"
+    , "TeslaGun_Cube.008"
+    ]
+        |> List.map Obj.Decode.object
+        |> List.map ((|>) decoder)
+        |> Obj.Decode.combine
 
 
 shadowParts : Decoder a -> Decoder a
@@ -78,24 +85,27 @@ yUpToZUpFrame =
         |> Frame3d.rotateAround Axis3d.x (Angle.degrees 90)
 
 
-pod : { mesh : Textured MeshCoordinates, shadow : Shadow MeshCoordinates }
+pod : { mesh : Textured MeshCoordinates, guns : List (Textured MeshCoordinates), shadow : Shadow MeshCoordinates }
 pod =
     let
         decoder =
-            Obj.Decode.map2
-                (\mesh shadow ->
+            Obj.Decode.map3
+                (\mesh shadow guns_ ->
                     { mesh = Scene3d.Mesh.texturedFaces mesh
                     , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.indexedTriangles shadow)
+                    , guns = List.map Scene3d.Mesh.texturedFaces guns_
                     }
                 )
                 (meshParts (Obj.Decode.texturedFacesIn yUpToZUpFrame))
                 (shadowParts (Obj.Decode.trianglesIn yUpToZUpFrame))
+                (guns (Obj.Decode.texturedFacesIn yUpToZUpFrame))
     in
     Meshes.Pod.obj
         |> Obj.Decode.decodeString Length.meters decoder
         |> Result.withDefault
             { mesh = Scene3d.Mesh.texturedFaces TriangularMesh.empty
             , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.texturedFaces TriangularMesh.empty)
+            , guns = []
             }
 
 
@@ -154,6 +164,12 @@ view model =
                         (Scene3d.Material.texturedMatte texture)
                         pod.mesh
                         pod.shadow
+                    , case pod.guns of
+                        gun :: _ ->
+                            Scene3d.mesh (Scene3d.Material.texturedMatte texture) gun
+
+                        [] ->
+                            Scene3d.nothing
                     , Scene3d.quad (Scene3d.Material.matte Color.blue)
                         (Point3d.meters -5 5 0)
                         (Point3d.meters 5 5 0)
