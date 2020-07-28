@@ -73,7 +73,7 @@ import Vector3d exposing (Vector3d)
 [the OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
 -}
 type Decoder a
-    = Decoder (VertexData -> List ElementGroup -> Result String a)
+    = Decoder (VertexData -> List String -> List ElementGroup -> Result String a)
 
 
 {-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFacets` from elm-3d-scene.
@@ -118,7 +118,7 @@ how to convert float coordinates into physical units.
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
-    decodeHelp units decode (String.lines content) [] [] [] [] Nothing Nothing [ "default" ] []
+    decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] []
 
 
 
@@ -137,14 +137,14 @@ Like the car base and car wheels.
 -}
 object : String -> Decoder a -> Decoder a
 object name =
-    filter (\properties -> properties.object == Just name)
+    filterHelp ("object '" ++ name ++ "'") (\properties -> properties.object == Just name)
 
 
 {-| Decode the data for the certain group.
 -}
 group : String -> Decoder a -> Decoder a
 group name =
-    filter (\properties -> List.member name properties.groups)
+    filterHelp ("group '" ++ name ++ "'") (\properties -> List.member name properties.groups)
 
 
 {-| Decode the default group. This group has a special meaning,
@@ -163,7 +163,7 @@ defaultGroup =
 -}
 material : String -> Decoder a -> Decoder a
 material name =
-    filter (\properties -> properties.material == Just name)
+    filterHelp ("material '" ++ name ++ "'") (\properties -> properties.material == Just name)
 
 
 
@@ -175,7 +175,7 @@ material name =
 objectNames : Decoder (List String)
 objectNames =
     Decoder
-        (\_ elements ->
+        (\_ _ elements ->
             elements
                 |> List.foldl
                     (\( groupProperties, _, _ ) objectsSet ->
@@ -197,7 +197,7 @@ objectNames =
 groupNames : Decoder (List String)
 groupNames =
     Decoder
-        (\_ elements ->
+        (\_ _ elements ->
             elements
                 |> List.foldl
                     (\( groupProperties, _, _ ) groupsSet ->
@@ -214,7 +214,7 @@ groupNames =
 materialNames : Decoder (List String)
 materialNames =
     Decoder
-        (\_ elements ->
+        (\_ _ elements ->
             elements
                 |> List.foldl
                     (\( groupProperties, _, _ ) materialsSet ->
@@ -239,7 +239,10 @@ materialNames =
 -}
 map : (a -> b) -> Decoder a -> Decoder b
 map fn (Decoder decoder) =
-    Decoder (\vertexData elements -> Result.map fn (decoder vertexData elements))
+    Decoder
+        (\vertexData filters elements ->
+            Result.map fn (decoder vertexData filters elements)
+        )
 
 
 {-| Join the result from two decoders. This lets you extract parts of the same OBJ file into separate meshes.
@@ -250,25 +253,51 @@ map fn (Decoder decoder) =
 -}
 map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
 map2 fn (Decoder decoderA) (Decoder decoderB) =
-    Decoder (\vertexData elements -> Result.map2 fn (decoderA vertexData elements) (decoderB vertexData elements))
+    Decoder
+        (\vertexData filters elements ->
+            Result.map2 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+        )
 
 
 {-| -}
 map3 : (a -> b -> c -> d) -> Decoder a -> Decoder b -> Decoder c -> Decoder d
 map3 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) =
-    Decoder (\vertexData elements -> Result.map3 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements))
+    Decoder
+        (\vertexData filters elements ->
+            Result.map3 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+                (decoderC vertexData filters elements)
+        )
 
 
 {-| -}
 map4 : (a -> b -> c -> d -> e) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e
 map4 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decoderD) =
-    Decoder (\vertexData elements -> Result.map4 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements) (decoderD vertexData elements))
+    Decoder
+        (\vertexData filters elements ->
+            Result.map4 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+                (decoderC vertexData filters elements)
+                (decoderD vertexData filters elements)
+        )
 
 
 {-| -}
 map5 : (a -> b -> c -> d -> e -> f) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e -> Decoder f
 map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decoderD) (Decoder decoderE) =
-    Decoder (\vertexData elements -> Result.map5 fn (decoderA vertexData elements) (decoderB vertexData elements) (decoderC vertexData elements) (decoderD vertexData elements) (decoderE vertexData elements))
+    Decoder
+        (\vertexData filters elements ->
+            Result.map5 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+                (decoderC vertexData filters elements)
+                (decoderD vertexData filters elements)
+                (decoderE vertexData filters elements)
+        )
 
 
 
@@ -285,10 +314,20 @@ filter :
     ({ groups : List String, object : Maybe String, material : Maybe String } -> Bool)
     -> Decoder a
     -> Decoder a
-filter fn (Decoder decoder) =
+filter =
+    filterHelp "<custom filter>"
+
+
+filterHelp :
+    String
+    -> ({ groups : List String, object : Maybe String, material : Maybe String } -> Bool)
+    -> Decoder a
+    -> Decoder a
+filterHelp name fn (Decoder decoder) =
     Decoder
-        (\vertexData elements ->
+        (\vertexData filters elements ->
             decoder vertexData
+                (name :: filters)
                 (List.filter
                     (\( properties, _, _ ) -> fn properties)
                     elements
@@ -300,11 +339,14 @@ filter fn (Decoder decoder) =
 -}
 oneOf : List (Decoder a) -> Decoder a
 oneOf decoders =
-    Decoder (\vertexData elements -> oneOfHelp vertexData elements decoders [])
+    Decoder
+        (\vertexData filters elements ->
+            oneOfHelp vertexData filters elements decoders []
+        )
 
 
-oneOfHelp : VertexData -> List ElementGroup -> List (Decoder a) -> List String -> Result String a
-oneOfHelp vertexData elements decoders errors =
+oneOfHelp : VertexData -> List String -> List ElementGroup -> List (Decoder a) -> List String -> Result String a
+oneOfHelp vertexData filters elements decoders errors =
     case decoders of
         [] ->
             if errors == [] then
@@ -314,12 +356,12 @@ oneOfHelp vertexData elements decoders errors =
                 Err ("Failed oneOf decoder: '" ++ String.join "', '" (List.reverse errors) ++ "'.")
 
         (Decoder decoder) :: remainingDecoders ->
-            case decoder vertexData elements of
+            case decoder vertexData filters elements of
                 Ok res ->
                     Ok res
 
                 Err error ->
-                    oneOfHelp vertexData elements remainingDecoders (error :: errors)
+                    oneOfHelp vertexData filters elements remainingDecoders (error :: errors)
 
 
 {-| A decoder that always succeeds with the result. May be useful in combination with `oneOf` to
@@ -327,7 +369,7 @@ provide a placeholder mesh if decoding fails.
 -}
 succeed : a -> Decoder a
 succeed mesh =
-    Decoder (\_ _ -> Result.Ok mesh)
+    Decoder (\_ _ _ -> Result.Ok mesh)
 
 
 {-| A decoder that always fails with a given error message.
@@ -335,7 +377,7 @@ Use it in case you need custom error messages.
 -}
 fail : String -> Decoder a
 fail error =
-    Decoder (\_ _ -> Result.Err error)
+    Decoder (\_ _ _ -> Result.Err error)
 
 
 {-| Run one decoder and then run another decoder. Useful when you first want to look at metadata, and then filter based on that.
@@ -343,12 +385,12 @@ fail error =
 andThen : (a -> Decoder b) -> Decoder a -> Decoder b
 andThen fn (Decoder decoderA) =
     Decoder
-        (\vertexData elements ->
-            case decoderA vertexData elements of
+        (\vertexData filters elements ->
+            case decoderA vertexData filters elements of
                 Ok result ->
                     case fn result of
                         Decoder decoderB ->
-                            decoderB vertexData elements
+                            decoderB vertexData [] elements
 
                 Err error ->
                     Err error
@@ -376,18 +418,18 @@ to extract meshes for all materials:
 combine : List (Decoder a) -> Decoder (List a)
 combine decoders =
     Decoder
-        (\vertexData elements ->
-            combineHelp vertexData elements decoders []
+        (\vertexData filters elements ->
+            combineHelp vertexData filters elements decoders []
         )
 
 
-combineHelp : VertexData -> List ElementGroup -> List (Decoder a) -> List a -> Result String (List a)
-combineHelp vertexData elements decoders list =
+combineHelp : VertexData -> List String -> List ElementGroup -> List (Decoder a) -> List a -> Result String (List a)
+combineHelp vertexData filters elements decoders list =
     case decoders of
         (Decoder decoder) :: remainingDecoders ->
-            case decoder vertexData elements of
+            case decoder vertexData filters elements of
                 Ok result ->
-                    combineHelp vertexData elements remainingDecoders (result :: list)
+                    combineHelp vertexData filters elements remainingDecoders (result :: list)
 
                 Err error ->
                     Err error
@@ -415,25 +457,57 @@ but it was exported with Y-up:
 -}
 trianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh (Point3d Meters coordinates))
 trianglesIn frame =
-    Decoder (\vertexData elements -> triangularMesh (addTriangles vertexData frame) elements (indexState vertexData.indexMap) [])
+    Decoder
+        (\vertexData filters elements ->
+            triangularMesh
+                (addTriangles vertexData frame)
+                filters
+                elements
+                (indexState vertexData.indexMap)
+                []
+        )
 
 
 {-| -}
 facesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates })
 facesIn frame =
-    Decoder (\vertexData elements -> triangularMesh (addFaces vertexData frame) elements (indexState vertexData.indexMap) [])
+    Decoder
+        (\vertexData filters elements ->
+            triangularMesh
+                (addFaces vertexData frame)
+                filters
+                elements
+                (indexState vertexData.indexMap)
+                []
+        )
 
 
 {-| -}
 texturedTrianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, uv : ( Float, Float ) })
 texturedTrianglesIn frame =
-    Decoder (\vertexData elements -> triangularMesh (addTexturedTriangles vertexData frame) elements (indexState vertexData.indexMap) [])
+    Decoder
+        (\vertexData filters elements ->
+            triangularMesh
+                (addTexturedTriangles vertexData frame)
+                filters
+                elements
+                (indexState vertexData.indexMap)
+                []
+        )
 
 
 {-| -}
 texturedFacesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) })
 texturedFacesIn frame =
-    Decoder (\vertexData elements -> triangularMesh (addTexturedFaces vertexData frame) elements (indexState vertexData.indexMap) [])
+    Decoder
+        (\vertexData filters elements ->
+            triangularMesh
+                (addTexturedFaces vertexData frame)
+                filters
+                elements
+                (indexState vertexData.indexMap)
+                []
+        )
 
 
 
@@ -474,8 +548,8 @@ type alias VertexData =
     }
 
 
-type alias Element =
-    List Vertex
+type Element
+    = Element Int (List Vertex)
 
 
 type Vertex
@@ -520,7 +594,8 @@ indexState indexMap =
 {-| Defines a function that knows how to collect a certain kind of triangle
 -}
 type alias AddIndexedTriangles a =
-    List Vertex
+    Int
+    -> List Vertex
     -> List Element
     -> Int
     -> Array (List Int)
@@ -530,20 +605,24 @@ type alias AddIndexedTriangles a =
     -> Result String ( IndexState a, List ( Int, Int, Int ) )
 
 
-triangularMesh : AddIndexedTriangles a -> List ElementGroup -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
-triangularMesh add elementGroups { maxIndex, indexMap, vertices } faceIndices =
+triangularMesh : AddIndexedTriangles a -> List String -> List ElementGroup -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
+triangularMesh add filters elementGroups { maxIndex, indexMap, vertices } faceIndices =
     case elementGroups of
-        ( _, firstElement, remainingElements ) :: remainingElementGroups ->
-            case add firstElement remainingElements maxIndex indexMap vertices [] faceIndices of
+        ( _, Element lineno firstElement, remainingElements ) :: remainingElementGroups ->
+            case add lineno firstElement remainingElements maxIndex indexMap vertices [] faceIndices of
                 Ok ( newIndexedState, newFaceIndices ) ->
-                    triangularMesh add remainingElementGroups newIndexedState newFaceIndices
+                    triangularMesh add filters remainingElementGroups newIndexedState newFaceIndices
 
                 Err error ->
                     Err error
 
         [] ->
             if faceIndices == [] then
-                Err "No faces found"
+                if filters == [] then
+                    Err "No faces found"
+
+                else
+                    Err ("No faces found for " ++ String.join ", " filters)
 
             else
                 Ok (TriangularMesh.indexed (Array.fromList (List.reverse vertices)) faceIndices)
@@ -566,7 +645,7 @@ groupIndices p1 more result =
 
 
 addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Point3d Meters coordinates)
-addTriangles vertexData frame element elements maxIndex indexMap vertices indices faceIndices =
+addTriangles vertexData frame lineno element elements maxIndex indexMap vertices indices faceIndices =
     case element of
         [] ->
             case indices of
@@ -576,9 +655,10 @@ addTriangles vertexData frame element elements maxIndex indexMap vertices indice
                             groupIndices p1 remainingIndices faceIndices
                     in
                     case elements of
-                        elementVertices :: remainingElements ->
+                        (Element newLineno elementVertices) :: remainingElements ->
                             addTriangles vertexData
                                 frame
+                                newLineno
                                 elementVertices
                                 remainingElements
                                 maxIndex
@@ -599,6 +679,7 @@ addTriangles vertexData frame element elements maxIndex indexMap vertices indice
                 Just [ idx ] ->
                     addTriangles vertexData
                         frame
+                        lineno
                         remainingVertices
                         elements
                         maxIndex
@@ -612,6 +693,7 @@ addTriangles vertexData frame element elements maxIndex indexMap vertices indice
                         Just vertex ->
                             addTriangles vertexData
                                 frame
+                                lineno
                                 remainingVertices
                                 elements
                                 (maxIndex + 1)
@@ -621,11 +703,11 @@ addTriangles vertexData frame element elements maxIndex indexMap vertices indice
                                 faceIndices
 
                         Nothing ->
-                            Err "Index out of range"
+                            formatError lineno "Index out of range"
 
 
 addFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Face coordinates)
-addFaces vertexData frame element elements maxIndex indexMap vertices indices faceIndices =
+addFaces vertexData frame lineno element elements maxIndex indexMap vertices indices faceIndices =
     case element of
         [] ->
             case indices of
@@ -635,9 +717,10 @@ addFaces vertexData frame element elements maxIndex indexMap vertices indices fa
                             groupIndices p1 remainingIndices faceIndices
                     in
                     case elements of
-                        elementVertices :: remainingElements ->
+                        (Element newLineno elementVertices) :: remainingElements ->
                             addFaces vertexData
                                 frame
+                                newLineno
                                 elementVertices
                                 remainingElements
                                 maxIndex
@@ -662,6 +745,7 @@ addFaces vertexData frame element elements maxIndex indexMap vertices indices fa
                 Just idx ->
                     addFaces vertexData
                         frame
+                        lineno
                         remainingVertices
                         elements
                         maxIndex
@@ -684,6 +768,7 @@ addFaces vertexData frame element elements maxIndex indexMap vertices indices fa
                         Just vertex ->
                             addFaces vertexData
                                 frame
+                                lineno
                                 remainingVertices
                                 elements
                                 (maxIndex + 1)
@@ -693,14 +778,14 @@ addFaces vertexData frame element elements maxIndex indexMap vertices indices fa
                                 faceIndices
 
                         Nothing ->
-                            Err "Index out of range"
+                            formatError lineno "Index out of range"
 
         (Vertex _ _ Nothing) :: _ ->
-            Err "Vertex has no normal vector"
+            formatError lineno "Vertex has no normal vector"
 
 
 addTexturedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedTriangle coordinates)
-addTexturedTriangles vertexData frame element elements maxIndex indexMap vertices indices faceIndices =
+addTexturedTriangles vertexData frame lineno element elements maxIndex indexMap vertices indices faceIndices =
     case element of
         [] ->
             case indices of
@@ -710,9 +795,10 @@ addTexturedTriangles vertexData frame element elements maxIndex indexMap vertice
                             groupIndices p1 remainingIndices faceIndices
                     in
                     case elements of
-                        elementVertices :: remainingElements ->
+                        (Element newLineno elementVertices) :: remainingElements ->
                             addTexturedTriangles vertexData
                                 frame
+                                newLineno
                                 elementVertices
                                 remainingElements
                                 maxIndex
@@ -737,6 +823,7 @@ addTexturedTriangles vertexData frame element elements maxIndex indexMap vertice
                 Just idx ->
                     addTexturedTriangles vertexData
                         frame
+                        lineno
                         remainingVertices
                         elements
                         maxIndex
@@ -759,6 +846,7 @@ addTexturedTriangles vertexData frame element elements maxIndex indexMap vertice
                         Just vertex ->
                             addTexturedTriangles vertexData
                                 frame
+                                lineno
                                 remainingVertices
                                 elements
                                 (maxIndex + 1)
@@ -768,14 +856,14 @@ addTexturedTriangles vertexData frame element elements maxIndex indexMap vertice
                                 faceIndices
 
                         Nothing ->
-                            Err "Index out of range"
+                            formatError lineno "Index out of range"
 
         (Vertex _ Nothing _) :: _ ->
-            Err "Vertex has no texture coordinates"
+            formatError lineno "Vertex has no texture coordinates"
 
 
 addTexturedFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedFace coordinates)
-addTexturedFaces vertexData frame element elements maxIndex indexMap vertices indices faceIndices =
+addTexturedFaces vertexData frame lineno element elements maxIndex indexMap vertices indices faceIndices =
     case element of
         [] ->
             case indices of
@@ -785,9 +873,10 @@ addTexturedFaces vertexData frame element elements maxIndex indexMap vertices in
                             groupIndices p1 remainingIndices faceIndices
                     in
                     case elements of
-                        elementVertices :: remainingElements ->
+                        (Element newLineno elementVertices) :: remainingElements ->
                             addTexturedFaces vertexData
                                 frame
+                                newLineno
                                 elementVertices
                                 remainingElements
                                 maxIndex
@@ -812,6 +901,7 @@ addTexturedFaces vertexData frame element elements maxIndex indexMap vertices in
                 Just idx ->
                     addTexturedFaces vertexData
                         frame
+                        lineno
                         remainingVertices
                         elements
                         maxIndex
@@ -836,6 +926,7 @@ addTexturedFaces vertexData frame element elements maxIndex indexMap vertices in
                         Just vertex ->
                             addTexturedFaces vertexData
                                 frame
+                                lineno
                                 remainingVertices
                                 elements
                                 (maxIndex + 1)
@@ -845,10 +936,10 @@ addTexturedFaces vertexData frame element elements maxIndex indexMap vertices in
                                 faceIndices
 
                         Nothing ->
-                            Err "Index out of range"
+                            formatError lineno "Index out of range"
 
         _ ->
-            Err "Vertex missing normal vector and/or texture coordinates"
+            formatError lineno "Vertex missing normal vector and/or texture coordinates"
 
 
 lookup2 : Int -> Int -> List Int -> Maybe Int
@@ -881,8 +972,9 @@ lookup1 idx1 list =
 
 decodeHelp :
     (Float -> Length)
-    -> (VertexData -> List ElementGroup -> Result String a)
+    -> (VertexData -> List String -> List ElementGroup -> Result String a)
     -> List String
+    -> Int
     -> List (Point3d Meters ObjCoordinates)
     -> List (Direction3d ObjCoordinates)
     -> List ( Float, Float )
@@ -892,7 +984,7 @@ decodeHelp :
     -> List String
     -> List Element
     -> Result String a
-decodeHelp units decode lines positions normals uvs elementGroups object_ material_ groups_ elements =
+decodeHelp units decode lines lineno positions normals uvs elementGroups object_ material_ groups_ elements =
     case lines of
         [] ->
             let
@@ -905,6 +997,7 @@ decodeHelp units decode lines positions normals uvs elementGroups object_ materi
                 , uvs = Array.fromList (List.reverse uvs)
                 , indexMap = Array.repeat (Array.length positions_) []
                 }
+                []
                 (case elements of
                     [] ->
                         elementGroups
@@ -915,7 +1008,7 @@ decodeHelp units decode lines positions normals uvs elementGroups object_ materi
                 )
 
         line :: remainingLines ->
-            case parseLine units line of
+            case parseLine lineno units line of
                 Property propertyType ->
                     let
                         newElementGroups =
@@ -928,35 +1021,35 @@ decodeHelp units decode lines positions normals uvs elementGroups object_ materi
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
-                            decodeHelp units decode remainingLines positions normals uvs newElementGroups object_ material_ newGroups []
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups []
 
                         ObjectProperty newObject ->
-                            decodeHelp units decode remainingLines positions normals uvs newElementGroups (Just newObject) material_ groups_ []
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ []
 
                         MaterialProperty newMaterial ->
-                            decodeHelp units decode remainingLines positions normals uvs newElementGroups object_ (Just newMaterial) groups_ []
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ []
 
                 PositionData position ->
-                    decodeHelp units decode remainingLines (position :: positions) normals uvs elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs elementGroups object_ material_ groups_ elements
 
                 NormalData normal ->
-                    decodeHelp units decode remainingLines positions (normal :: normals) uvs elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs elementGroups object_ material_ groups_ elements
 
                 UvData uv ->
-                    decodeHelp units decode remainingLines positions normals (uv :: uvs) elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) elementGroups object_ material_ groups_ elements
 
                 ElementData element ->
-                    decodeHelp units decode remainingLines positions normals uvs elementGroups object_ material_ groups_ (element :: elements)
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ (element :: elements)
 
                 Skip ->
-                    decodeHelp units decode remainingLines positions normals uvs elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ elements
 
                 Error error ->
-                    Err error
+                    formatError lineno error
 
 
-parseLine : (Float -> Length) -> String -> Line
-parseLine units line =
+parseLine : Int -> (Float -> Length) -> String -> Line
+parseLine lineno units line =
     if String.startsWith "o " line then
         case String.trim (String.dropLeft 2 line) of
             "" ->
@@ -1017,7 +1110,7 @@ parseLine units line =
                 Error "Face has less than three vertices"
 
             Ok vertices ->
-                ElementData vertices
+                ElementData (Element lineno vertices)
 
             Err err ->
                 Error err
@@ -1048,3 +1141,8 @@ parseVertices list vertices =
 
         [] ->
             Ok (List.reverse vertices)
+
+
+formatError : Int -> String -> Result String a
+formatError lineno error =
+    Err ("Line " ++ String.fromInt lineno ++ ": " ++ error)
