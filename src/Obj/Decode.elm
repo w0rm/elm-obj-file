@@ -7,7 +7,7 @@ module Obj.Decode exposing
     , map, map2, map3, map4, map5
     , filter, oneOf, fail, succeed, andThen, combine
     , ObjCoordinates
-    , facesIn, texturedFacesIn, texturedTrianglesIn, trianglesIn, polylinesIn
+    , trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, polylinesIn
     )
 
 {-|
@@ -56,7 +56,7 @@ Note that all primitive decoders require at least one face and will fail if no f
 
 @docs ObjCoordinates
 
-@docs facesIn, texturedFacesIn, texturedTrianglesIn, trianglesIn, polylinesIn
+@docs trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, polylinesIn
 
 -}
 
@@ -123,8 +123,7 @@ polylines =
 {-| Run the decoder on the string. Takes a function, that knows
 how to convert float coordinates into physical units.
 
-    decodeString Length.centimeters texturedFaces string == Ok (TriangularMesh ...)
-    decodeString Length.centimeters texturedFaces string == Err ...
+    decodeString Length.centimeters texturedFaces string
 
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
@@ -137,8 +136,11 @@ decodeString units (Decoder decode) content =
     getMesh : Cmd Msg
     getMesh =
         Http.get
-            { url = "https://declension.github.io/elm-obj-loader/meshes/suzanne.obj"
-            , expect = expectObj GotMesh Length.centimeters texturedFaces
+            { url = "Pod.obj"
+            , expect =
+                expectObj GotMesh
+                    Length.centimeters
+                    texturedFaces
             }
 
 -}
@@ -172,7 +174,7 @@ expectObj toMsg units decoder =
 -- FILTERING
 
 
-{-| Decode the data for the object. You may store multiple objects in the same OBJ file.
+{-| Decode the data for the object. You may decode multiple objects from the same OBJ file.
 Like the car base and car wheels.
 
     base =
@@ -195,7 +197,7 @@ group name =
 
 
 {-| Decode the default group. This group has a special meaning,
-all triangles\_ are assigned to it if a group is not specified.
+all triangles are assigned to it if a group is not specified.
 
     defaultGroup =
         group "default"
@@ -295,7 +297,14 @@ map fn (Decoder decoder) =
 {-| Join the result from two decoders. This lets you extract parts of the same OBJ file into separate meshes.
 
     carDecoder =
-        map2 (\wheels base -> { wheels = wheels, base = base }) wheelsDecoder baseDecoder
+        map2
+            (\wheels base ->
+                { wheels = wheels
+                , base = base
+                }
+            )
+            wheelsDecoder
+            baseDecoder
 
 -}
 map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
@@ -354,7 +363,10 @@ map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decode
 {-| Filter what should be decoded. For example, to implement the `group` decoder:
 
     group name =
-        filter (\properties -> List.member name properties.groups)
+        filter
+            (\properties ->
+                List.member name properties.groups
+            )
 
 -}
 filter :
@@ -457,7 +469,8 @@ to extract meshes for all materials:
                 )
             |> combine
 
-    -- Decode materials, and then decode triangles for these materials.
+    -- Decode materials, and then decode
+    -- triangles for these materials
     withMaterials =
         materials |> andThen trianglesForMaterials
 
@@ -496,7 +509,9 @@ but it was exported with Y-up:
 
     yUpToZUpFrame =
         Frame3d.atOrigin
-            |> Frame3d.rotateAround Axis3d.x (Angle.degrees 90)
+            |> Frame3d.rotateAround
+                Axis3d.x
+                (Angle.degrees 90)
 
     yUpToZUpTriangles =
         trianglesIn yUpToZUpFrame
