@@ -8,8 +8,8 @@ import Color exposing (Color)
 import Direction3d
 import Frame3d exposing (Frame3d)
 import Html exposing (Html)
+import Http
 import Length exposing (Meters)
-import Meshes.Pod
 import Obj.Decode exposing (Decoder, ObjCoordinates)
 import Pixels
 import Point3d
@@ -17,7 +17,6 @@ import Scene3d
 import Scene3d.Material exposing (Texture)
 import Scene3d.Mesh exposing (Shadow, Textured)
 import Task
-import TriangularMesh
 import Viewpoint3d
 import WebGL.Texture
 
@@ -85,50 +84,64 @@ yUpToZUpFrame =
         |> Frame3d.rotateAround Axis3d.x (Angle.degrees 90)
 
 
-pod : { mesh : Textured MeshCoordinates, guns : List (Textured MeshCoordinates), shadow : Shadow MeshCoordinates }
+pod : Decoder { mesh : Textured MeshCoordinates, guns : List (Textured MeshCoordinates), shadow : Shadow MeshCoordinates }
 pod =
-    let
-        decoder =
-            Obj.Decode.map3
-                (\mesh shadow guns_ ->
-                    { mesh = Scene3d.Mesh.texturedFaces mesh
-                    , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.indexedTriangles shadow)
-                    , guns = List.map Scene3d.Mesh.texturedFaces guns_
-                    }
-                )
-                (meshParts (Obj.Decode.texturedFacesIn yUpToZUpFrame))
-                (shadowParts (Obj.Decode.trianglesIn yUpToZUpFrame))
-                (guns (Obj.Decode.texturedFacesIn yUpToZUpFrame))
-    in
-    Meshes.Pod.obj
-        |> Obj.Decode.decodeString Length.meters decoder
-        |> Result.withDefault
-            { mesh = Scene3d.Mesh.texturedFaces TriangularMesh.empty
-            , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.texturedFaces TriangularMesh.empty)
-            , guns = []
+    Obj.Decode.map3
+        (\mesh shadow guns_ ->
+            { mesh = Scene3d.Mesh.texturedFaces mesh
+            , shadow = Scene3d.Mesh.shadow (Scene3d.Mesh.indexedTriangles shadow)
+            , guns = List.map Scene3d.Mesh.texturedFaces guns_
             }
+        )
+        (meshParts (Obj.Decode.texturedFacesIn yUpToZUpFrame))
+        (shadowParts (Obj.Decode.trianglesIn yUpToZUpFrame))
+        (guns (Obj.Decode.texturedFacesIn yUpToZUpFrame))
 
 
 type alias Model =
-    Maybe (Texture Color)
+    { texture : Maybe (Texture Color)
+    , mesh :
+        Maybe
+            { mesh : Textured MeshCoordinates
+            , guns : List (Textured MeshCoordinates)
+            , shadow : Shadow MeshCoordinates
+            }
+    }
 
 
 type Msg
     = LoadedTexture (Result WebGL.Texture.Error (Texture Color))
+    | LoadedMesh
+        (Result Http.Error
+            { mesh : Textured MeshCoordinates
+            , guns : List (Textured MeshCoordinates)
+            , shadow : Shadow MeshCoordinates
+            }
+        )
 
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( Nothing
-    , Meshes.Pod.texture
-        |> Scene3d.Material.loadWith Scene3d.Material.nearestNeighborFiltering
-        |> Task.attempt LoadedTexture
+    ( { texture = Nothing, mesh = Nothing }
+    , Cmd.batch
+        [ Scene3d.Material.loadWith Scene3d.Material.nearestNeighborFiltering "Pod.png"
+            |> Task.attempt LoadedTexture
+        , Http.get
+            { url = "Pod.obj.txt"
+            , expect = Obj.Decode.expectObj LoadedMesh Length.meters pod
+            }
+        ]
     )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update (LoadedTexture result) _ =
-    ( Result.toMaybe result, Cmd.none )
+update msg model =
+    case msg of
+        LoadedTexture result ->
+            ( { model | texture = Result.toMaybe result }, Cmd.none )
+
+        LoadedMesh mesh ->
+            ( { model | mesh = Result.toMaybe mesh }, Cmd.none )
 
 
 view : Model -> Html Msg
@@ -146,11 +159,8 @@ view model =
                 , verticalFieldOfView = Angle.degrees 30
                 }
     in
-    case model of
-        Nothing ->
-            Html.text "Loading…"
-
-        Just texture ->
+    case ( model.texture, model.mesh ) of
+        ( Just texture, Just mesh ) ->
             Scene3d.sunny
                 { upDirection = Direction3d.z
                 , sunlightDirection = Direction3d.negativeZ
@@ -162,9 +172,9 @@ view model =
                 , entities =
                     [ Scene3d.meshWithShadow
                         (Scene3d.Material.texturedMatte texture)
-                        pod.mesh
-                        pod.shadow
-                    , case pod.guns of
+                        mesh.mesh
+                        mesh.shadow
+                    , case mesh.guns of
                         gun :: _ ->
                             Scene3d.mesh (Scene3d.Material.texturedMatte texture) gun
 
@@ -177,6 +187,9 @@ view model =
                         (Point3d.meters -5 -5 0)
                     ]
                 }
+
+        _ ->
+            Html.text "Loading…"
 
 
 main : Program () Model Msg

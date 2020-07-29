@@ -1,14 +1,5 @@
-module Meshes.Pod exposing (obj, texture)
-
-{-| The pod 3D model is designed by Kolja Wilcke <https://twitter.com/01k>
--}
-
-
-{-| The contents of the OBJ file
--}
-obj : String
-obj =
-    """# Blender v2.90 (sub 0) OBJ File: 'pod.blend'
+# Blender v2.90 (sub 0) OBJ File: 'pod.blend'
+# The pod 3D model is designed by Kolja Wilcke <https://twitter.com/01k>
 # www.blender.org
 mtllib pod.mtl
 o pod_Cube.001
@@ -13274,11 +13265,3 @@ f 3094/5592/818 3093/5586/818 3101/5589/818 3102/5595/818
 f 3100/3976/1244 3099/3975/1244 3107/5598/1244 3108/5599/1244
 f 3099/4140/821 3097/4139/821 3105/5597/821 3107/5596/821
 f 3095/5591/1244 3096/5590/1244 3104/5600/1244 3103/5601/1244
-"""
-
-
-{-| This is just a 4×4 pixels image
--}
-texture : String
-texture =
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAPUlEQVR4AWPcPy/kRsEaHXEGm6SJjNd3FD+b2WsgyyCk4cG4qd5UTvS0viEDg/RMRq9aDmupH8ZGDBpidQDy+BCuKp9W4wAAAABJRU5ErkJggg=="
