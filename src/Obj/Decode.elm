@@ -1,7 +1,7 @@
 module Obj.Decode exposing
     ( Decoder
     , triangles, faces, texturedTriangles, texturedFaces, polylines
-    , decodeString
+    , decodeString, expectObj
     , object, group, defaultGroup, material
     , objectNames, groupNames, materialNames
     , map, map2, map3, map4, map5
@@ -29,7 +29,7 @@ Note that all primitive decoders require at least one face and will fail if no f
 
 # Run Decoders
 
-@docs decodeString
+@docs decodeString, expectObj
 
 
 # Filtering
@@ -63,6 +63,7 @@ Note that all primitive decoders require at least one face and will fail if no f
 import Array exposing (Array)
 import Direction3d exposing (Direction3d)
 import Frame3d exposing (Frame3d)
+import Http
 import Length exposing (Length, Meters)
 import Point3d exposing (Point3d)
 import Polyline3d exposing (Polyline3d)
@@ -122,13 +123,49 @@ polylines =
 {-| Run the decoder on the string. Takes a function, that knows
 how to convert float coordinates into physical units.
 
-    decodeString Length.centimeters (texturedFaces []) string == Ok (TriangularMesh ...)
-    decodeString Length.centimeters (texturedFaces []) string == Err ...
+    decodeString Length.centimeters texturedFaces string == Ok (TriangularMesh ...)
+    decodeString Length.centimeters texturedFaces string == Err ...
 
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
     decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] []
+
+
+{-| Load a mesh from [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
+
+    getMesh : Cmd Msg
+    getMesh =
+        Http.get
+            { url = "https://declension.github.io/elm-obj-loader/meshes/suzanne.obj"
+            , expect = expectObj GotMesh Length.centimeters texturedFaces
+            }
+
+-}
+expectObj : (Result Http.Error a -> msg) -> (Float -> Length) -> Decoder a -> Http.Expect msg
+expectObj toMsg units decoder =
+    Http.expectStringResponse toMsg <|
+        \response ->
+            case response of
+                Http.BadUrl_ url ->
+                    Err (Http.BadUrl url)
+
+                Http.Timeout_ ->
+                    Err Http.Timeout
+
+                Http.NetworkError_ ->
+                    Err Http.NetworkError
+
+                Http.BadStatus_ metadata _ ->
+                    Err (Http.BadStatus metadata.statusCode)
+
+                Http.GoodStatus_ _ body ->
+                    case decodeString units decoder body of
+                        Ok value ->
+                            Ok value
+
+                        Err string ->
+                            Err (Http.BadBody string)
 
 
 
