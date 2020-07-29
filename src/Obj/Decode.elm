@@ -76,7 +76,7 @@ import Vector3d exposing (Vector3d)
 [the OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
 -}
 type Decoder a
-    = Decoder (VertexData -> List String -> List ElementGroup -> Result String a)
+    = Decoder (VertexData -> List String -> List Group -> Result String a)
 
 
 {-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFacets` from elm-3d-scene.
@@ -188,8 +188,8 @@ objectNames =
         (\_ _ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _, _ ) objectsSet ->
-                        case groupProperties.object of
+                    (\(Group properties _ _) objectsSet ->
+                        case properties.object of
                             Just obj ->
                                 Set.insert obj objectsSet
 
@@ -210,8 +210,8 @@ groupNames =
         (\_ _ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _, _ ) groupsSet ->
-                        List.foldl Set.insert groupsSet groupProperties.groups
+                    (\(Group properties _ _) groupsSet ->
+                        List.foldl Set.insert groupsSet properties.groups
                     )
                     Set.empty
                 |> Set.toList
@@ -227,8 +227,8 @@ materialNames =
         (\_ _ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _, _ ) materialsSet ->
-                        case groupProperties.material of
+                    (\(Group properties _ _) materialsSet ->
+                        case properties.material of
                             Just obj ->
                                 Set.insert obj materialsSet
 
@@ -339,7 +339,7 @@ filterHelp name fn (Decoder decoder) =
             decoder vertexData
                 (name :: filters)
                 (List.filter
-                    (\( properties, _, _ ) -> fn properties)
+                    (\(Group properties _ _) -> fn properties)
                     elements
                 )
         )
@@ -355,7 +355,7 @@ oneOf decoders =
         )
 
 
-oneOfHelp : VertexData -> List String -> List ElementGroup -> List (Decoder a) -> List String -> Result String a
+oneOfHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List String -> Result String a
 oneOfHelp vertexData filters elements decoders errors =
     case decoders of
         [] ->
@@ -433,7 +433,7 @@ combine decoders =
         )
 
 
-combineHelp : VertexData -> List String -> List ElementGroup -> List (Decoder a) -> List a -> Result String (List a)
+combineHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List a -> Result String (List a)
 combineHelp vertexData filters elements decoders list =
     case decoders of
         (Decoder decoder) :: remainingDecoders ->
@@ -468,11 +468,11 @@ but it was exported with Y-up:
 trianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh (Point3d Meters coordinates))
 trianglesIn frame =
     Decoder
-        (\vertexData filters elementGroups ->
+        (\vertexData filters groups ->
             triangularMesh
                 (addTriangles vertexData frame)
                 filters
-                elementGroups
+                groups
                 (indexState vertexData.indexMap)
                 []
         )
@@ -482,11 +482,11 @@ trianglesIn frame =
 facesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates })
 facesIn frame =
     Decoder
-        (\vertexData filters elementGroups ->
+        (\vertexData filters groups ->
             triangularMesh
                 (addFaces vertexData frame)
                 filters
-                elementGroups
+                groups
                 (indexState vertexData.indexMap)
                 []
         )
@@ -496,11 +496,11 @@ facesIn frame =
 texturedTrianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, uv : ( Float, Float ) })
 texturedTrianglesIn frame =
     Decoder
-        (\vertexData filters elementGroups ->
+        (\vertexData filters groups ->
             triangularMesh
                 (addTexturedTriangles vertexData frame)
                 filters
-                elementGroups
+                groups
                 (indexState vertexData.indexMap)
                 []
         )
@@ -510,11 +510,11 @@ texturedTrianglesIn frame =
 texturedFacesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) })
 texturedFacesIn frame =
     Decoder
-        (\vertexData filters elementGroups ->
+        (\vertexData filters groups ->
             triangularMesh
                 (addTexturedFaces vertexData frame)
                 filters
-                elementGroups
+                groups
                 (indexState vertexData.indexMap)
                 []
         )
@@ -524,9 +524,9 @@ texturedFacesIn frame =
 polylinesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (List (Polyline3d Meters coordinates))
 polylinesIn frame =
     Decoder
-        (\{ positions } filters elementGroups ->
+        (\{ positions } filters groups ->
             addPolylines (PolylinesSettings positions frame filters)
-                elementGroups
+                groups
                 []
                 0
                 []
@@ -558,13 +558,6 @@ type alias TexturedFace coordinates =
     }
 
 
-type alias GroupProperties =
-    { groups : List String
-    , object : Maybe String
-    , material : Maybe String
-    }
-
-
 type alias VertexData =
     { positions : Array (Point3d Meters ObjCoordinates)
     , normals : Array (Direction3d ObjCoordinates)
@@ -585,8 +578,14 @@ type Vertex
     = Vertex Int (Maybe Int) (Maybe Int)
 
 
-type alias ElementGroup =
-    ( GroupProperties, List FaceElement, List LineElement )
+type Group
+    = Group
+        { groups : List String
+        , object : Maybe String
+        , material : Maybe String
+        }
+        (List FaceElement)
+        (List LineElement)
 
 
 type PropertyType
@@ -635,10 +634,10 @@ type alias AddIndexedTriangles a =
     -> Result String ( IndexState a, List ( Int, Int, Int ) )
 
 
-triangularMesh : AddIndexedTriangles a -> List String -> List ElementGroup -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
-triangularMesh add filters elementGroups ({ maxIndex, indexMap, vertices } as currentIndexedState) faceIndices =
-    case elementGroups of
-        ( _, (FaceElement lineno elementVertices) :: faceElements, _ ) :: remainingElementGroups ->
+triangularMesh : AddIndexedTriangles a -> List String -> List Group -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
+triangularMesh add filters groups ({ maxIndex, indexMap, vertices } as currentIndexedState) faceIndices =
+    case groups of
+        (Group _ ((FaceElement lineno elementVertices) :: faceElements) _) :: remainingElementGroups ->
             case add lineno elementVertices faceElements maxIndex indexMap vertices [] faceIndices of
                 Ok ( newIndexedState, newFaceIndices ) ->
                     triangularMesh add filters remainingElementGroups newIndexedState newFaceIndices
@@ -646,7 +645,7 @@ triangularMesh add filters elementGroups ({ maxIndex, indexMap, vertices } as cu
                 Err error ->
                     Err error
 
-        ( _, [], _ ) :: remainingElementGroups ->
+        (Group _ [] _) :: remainingElementGroups ->
             -- skip an empty group
             triangularMesh add filters remainingElementGroups currentIndexedState faceIndices
 
@@ -1014,20 +1013,20 @@ type alias PolylinesSettings coordinates =
 
 addPolylines :
     PolylinesSettings coordinates
-    -> List ElementGroup
+    -> List Group
     -> List LineElement
     -> Int
     -> List Vertex
     -> List (Point3d Meters coordinates)
     -> List (Polyline3d Meters coordinates)
     -> Result String (List (Polyline3d Meters coordinates))
-addPolylines settings elementGroups elements lineno vertices points result =
+addPolylines settings groups elements lineno vertices points result =
     case vertices of
         (Vertex p _ _) :: remainingVertices ->
             case Array.get p settings.positions of
                 Just point ->
                     addPolylines settings
-                        elementGroups
+                        groups
                         elements
                         lineno
                         remainingVertices
@@ -1051,7 +1050,7 @@ addPolylines settings elementGroups elements lineno vertices points result =
             case elements of
                 (LineElement newLineno newVertices) :: remainingElements ->
                     addPolylines settings
-                        elementGroups
+                        groups
                         remainingElements
                         newLineno
                         newVertices
@@ -1059,8 +1058,8 @@ addPolylines settings elementGroups elements lineno vertices points result =
                         newResult
 
                 [] ->
-                    case elementGroups of
-                        ( _, _, newElements ) :: remainingGroups ->
+                    case groups of
+                        (Group _ _ newElements) :: remainingGroups ->
                             addPolylines settings
                                 remainingGroups
                                 newElements
@@ -1083,20 +1082,20 @@ addPolylines settings elementGroups elements lineno vertices points result =
 
 decodeHelp :
     (Float -> Length)
-    -> (VertexData -> List String -> List ElementGroup -> Result String a)
+    -> (VertexData -> List String -> List Group -> Result String a)
     -> List String
     -> Int
     -> List (Point3d Meters ObjCoordinates)
     -> List (Direction3d ObjCoordinates)
     -> List ( Float, Float )
-    -> List ElementGroup
+    -> List Group
     -> Maybe String
     -> Maybe String
     -> List String
     -> List FaceElement
     -> List LineElement
     -> Result String a
-decodeHelp units decode lines lineno positions normals uvs elementGroups object_ material_ groups_ faceElements lineElements =
+decodeHelp units decode lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements =
     case lines of
         [] ->
             let
@@ -1111,11 +1110,11 @@ decodeHelp units decode lines lineno positions normals uvs elementGroups object_
                 }
                 []
                 (if faceElements == [] && lineElements == [] then
-                    elementGroups
+                    groups
 
                  else
                     -- flush the last group
-                    ( GroupProperties groups_ object_ material_, faceElements, lineElements ) :: elementGroups
+                    Group { groups = groups_, object = object_, material = material_ } faceElements lineElements :: groups
                 )
 
         line :: remainingLines ->
@@ -1124,10 +1123,10 @@ decodeHelp units decode lines lineno positions normals uvs elementGroups object_
                     let
                         newElementGroups =
                             if faceElements == [] && lineElements == [] then
-                                elementGroups
+                                groups
 
                             else
-                                ( GroupProperties groups_ object_ material_, faceElements, lineElements ) :: elementGroups
+                                Group { groups = groups_, object = object_, material = material_ } faceElements lineElements :: groups
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
@@ -1140,22 +1139,22 @@ decodeHelp units decode lines lineno positions normals uvs elementGroups object_
                             decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] []
 
                 PositionData position ->
-                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs elementGroups object_ material_ groups_ faceElements lineElements
+                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements
 
                 NormalData normal ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs elementGroups object_ material_ groups_ faceElements lineElements
+                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements
 
                 UvData uv ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) elementGroups object_ material_ groups_ faceElements lineElements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements
 
                 FaceElementData faceElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ (faceElement :: faceElements) lineElements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (faceElement :: faceElements) lineElements
 
                 LineElementData lineElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ faceElements (lineElement :: lineElements)
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (lineElement :: lineElements)
 
                 Skip ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ faceElements lineElements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements
 
                 Error error ->
                     formatError lineno error
