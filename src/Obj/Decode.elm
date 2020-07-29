@@ -128,7 +128,7 @@ how to convert float coordinates into physical units.
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
-    decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] []
+    decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] []
 
 
 
@@ -188,7 +188,7 @@ objectNames =
         (\_ _ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _ ) objectsSet ->
+                    (\( groupProperties, _, _ ) objectsSet ->
                         case groupProperties.object of
                             Just obj ->
                                 Set.insert obj objectsSet
@@ -210,7 +210,7 @@ groupNames =
         (\_ _ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _ ) groupsSet ->
+                    (\( groupProperties, _, _ ) groupsSet ->
                         List.foldl Set.insert groupsSet groupProperties.groups
                     )
                     Set.empty
@@ -227,7 +227,7 @@ materialNames =
         (\_ _ elements ->
             elements
                 |> List.foldl
-                    (\( groupProperties, _ ) materialsSet ->
+                    (\( groupProperties, _, _ ) materialsSet ->
                         case groupProperties.material of
                             Just obj ->
                                 Set.insert obj materialsSet
@@ -339,7 +339,7 @@ filterHelp name fn (Decoder decoder) =
             decoder vertexData
                 (name :: filters)
                 (List.filter
-                    (\( properties, _ ) -> fn properties)
+                    (\( properties, _, _ ) -> fn properties)
                     elements
                 )
         )
@@ -573,9 +573,12 @@ type alias VertexData =
     }
 
 
-type Element
+type FaceElement
     = FaceElement Int (List Vertex)
-    | LineElement Int (List Vertex)
+
+
+type LineElement
+    = LineElement Int (List Vertex)
 
 
 type Vertex
@@ -583,7 +586,7 @@ type Vertex
 
 
 type alias ElementGroup =
-    ( GroupProperties, List Element )
+    ( GroupProperties, List FaceElement, List LineElement )
 
 
 type PropertyType
@@ -597,7 +600,8 @@ type Line
     | PositionData (Point3d Meters ObjCoordinates)
     | NormalData (Direction3d ObjCoordinates)
     | UvData ( Float, Float )
-    | ElementData Element
+    | FaceElementData FaceElement
+    | LineElementData LineElement
     | Error String
     | Skip
 
@@ -622,7 +626,7 @@ indexState indexMap =
 type alias AddIndexedTriangles a =
     Int
     -> List Vertex
-    -> List Element
+    -> List FaceElement
     -> Int
     -> Array (List Int)
     -> List a
@@ -632,15 +636,19 @@ type alias AddIndexedTriangles a =
 
 
 triangularMesh : AddIndexedTriangles a -> List String -> List ElementGroup -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
-triangularMesh add filters elementGroups { maxIndex, indexMap, vertices } faceIndices =
+triangularMesh add filters elementGroups ({ maxIndex, indexMap, vertices } as currentIndexedState) faceIndices =
     case elementGroups of
-        ( _, groupElements ) :: remainingElementGroups ->
-            case add 0 [] groupElements maxIndex indexMap vertices [] faceIndices of
+        ( _, (FaceElement lineno elementVertices) :: faceElements, _ ) :: remainingElementGroups ->
+            case add lineno elementVertices faceElements maxIndex indexMap vertices [] faceIndices of
                 Ok ( newIndexedState, newFaceIndices ) ->
                     triangularMesh add filters remainingElementGroups newIndexedState newFaceIndices
 
                 Err error ->
                     Err error
+
+        ( _, [], _ ) :: remainingElementGroups ->
+            -- skip an empty group
+            triangularMesh add filters remainingElementGroups currentIndexedState faceIndices
 
         [] ->
             if faceIndices == [] then
@@ -677,11 +685,12 @@ addTriangles vertexData frame lineno elementVertices elements maxIndex indexMap 
             let
                 newFaceIndices =
                     case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
                         [] ->
                             faceIndices
-
-                        p1 :: remainingIndices ->
-                            groupIndices p1 remainingIndices faceIndices
             in
             case elements of
                 (FaceElement newLineno newElementVertices) :: remainingElements ->
@@ -689,18 +698,6 @@ addTriangles vertexData frame lineno elementVertices elements maxIndex indexMap 
                         frame
                         newLineno
                         newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                _ :: remainingElements ->
-                    addTriangles vertexData
-                        frame
-                        0
-                        []
                         remainingElements
                         maxIndex
                         indexMap
@@ -750,11 +747,12 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
             let
                 newFaceIndices =
                     case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
                         [] ->
                             faceIndices
-
-                        p1 :: remainingIndices ->
-                            groupIndices p1 remainingIndices faceIndices
             in
             case elements of
                 (FaceElement newLineno newElementVertices) :: remainingElements ->
@@ -762,18 +760,6 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
                         frame
                         newLineno
                         newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                _ :: remainingElements ->
-                    addFaces vertexData
-                        frame
-                        0
-                        []
                         remainingElements
                         maxIndex
                         indexMap
@@ -802,7 +788,7 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
                         (idx :: indices)
                         faceIndices
 
-                _ ->
+                Nothing ->
                     case
                         Maybe.map2
                             (\position normal ->
@@ -839,11 +825,12 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
             let
                 newFaceIndices =
                     case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
                         [] ->
                             faceIndices
-
-                        p1 :: remainingIndices ->
-                            groupIndices p1 remainingIndices faceIndices
             in
             case elements of
                 (FaceElement newLineno newElementVertices) :: remainingElements ->
@@ -851,18 +838,6 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
                         frame
                         newLineno
                         newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                _ :: remainingElements ->
-                    addTexturedTriangles vertexData
-                        frame
-                        0
-                        []
                         remainingElements
                         maxIndex
                         indexMap
@@ -891,7 +866,7 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
                         (idx :: indices)
                         faceIndices
 
-                _ ->
+                Nothing ->
                     case
                         Maybe.map2
                             (\position uvCoord ->
@@ -928,11 +903,12 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
             let
                 newFaceIndices =
                     case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
                         [] ->
                             faceIndices
-
-                        p1 :: remainingIndices ->
-                            groupIndices p1 remainingIndices faceIndices
             in
             case elements of
                 (FaceElement newLineno newElementVertices) :: remainingElements ->
@@ -940,18 +916,6 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
                         frame
                         newLineno
                         newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                _ :: remainingElements ->
-                    addTexturedFaces vertexData
-                        frame
-                        0
-                        []
                         remainingElements
                         maxIndex
                         indexMap
@@ -980,7 +944,7 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
                         (idx :: indices)
                         faceIndices
 
-                _ ->
+                Nothing ->
                     case
                         Maybe.map3
                             (\position normal uvCoord ->
@@ -1050,7 +1014,7 @@ type alias PolylinesSettings coordinates =
 addPolylines :
     PolylinesSettings coordinates
     -> List ElementGroup
-    -> List Element
+    -> List LineElement
     -> Int
     -> List Vertex
     -> List (Point3d Meters coordinates)
@@ -1092,18 +1056,9 @@ addPolylines settings elementGroups elements lineno vertices points result =
                         []
                         newResult
 
-                _ :: remainingElements ->
-                    addPolylines settings
-                        elementGroups
-                        remainingElements
-                        0
-                        []
-                        []
-                        newResult
-
                 [] ->
                     case elementGroups of
-                        ( _, newElements ) :: remainingGroups ->
+                        ( _, _, newElements ) :: remainingGroups ->
                             addPolylines settings
                                 remainingGroups
                                 newElements
@@ -1136,9 +1091,10 @@ decodeHelp :
     -> Maybe String
     -> Maybe String
     -> List String
-    -> List Element
+    -> List FaceElement
+    -> List LineElement
     -> Result String a
-decodeHelp units decode lines lineno positions normals uvs elementGroups object_ material_ groups_ elements =
+decodeHelp units decode lines lineno positions normals uvs elementGroups object_ material_ groups_ faceElements lineElements =
     case lines of
         [] ->
             let
@@ -1152,13 +1108,12 @@ decodeHelp units decode lines lineno positions normals uvs elementGroups object_
                 , indexMap = Array.repeat (Array.length positions_) []
                 }
                 []
-                (case elements of
-                    [] ->
-                        elementGroups
+                (if faceElements == [] && lineElements == [] then
+                    elementGroups
 
-                    _ ->
-                        -- flush the last group
-                        ( GroupProperties groups_ object_ material_, elements ) :: elementGroups
+                 else
+                    -- flush the last group
+                    ( GroupProperties groups_ object_ material_, faceElements, lineElements ) :: elementGroups
                 )
 
         line :: remainingLines ->
@@ -1166,37 +1121,39 @@ decodeHelp units decode lines lineno positions normals uvs elementGroups object_
                 Property propertyType ->
                     let
                         newElementGroups =
-                            case elements of
-                                [] ->
-                                    elementGroups
+                            if faceElements == [] && lineElements == [] then
+                                elementGroups
 
-                                _ ->
-                                    ( GroupProperties groups_ object_ material_, elements ) :: elementGroups
+                            else
+                                ( GroupProperties groups_ object_ material_, faceElements, lineElements ) :: elementGroups
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups []
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups [] []
 
                         ObjectProperty newObject ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ []
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ [] []
 
                         MaterialProperty newMaterial ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ []
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] []
 
                 PositionData position ->
-                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs elementGroups object_ material_ groups_ faceElements lineElements
 
                 NormalData normal ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs elementGroups object_ material_ groups_ faceElements lineElements
 
                 UvData uv ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) elementGroups object_ material_ groups_ faceElements lineElements
 
-                ElementData element ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ (element :: elements)
+                FaceElementData faceElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ (faceElement :: faceElements) lineElements
+
+                LineElementData lineElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ faceElements (lineElement :: lineElements)
 
                 Skip ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ elements
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs elementGroups object_ material_ groups_ faceElements lineElements
 
                 Error error ->
                     formatError lineno error
@@ -1254,40 +1211,40 @@ parseLine lineno units line =
 
     else if String.startsWith "f " line then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
-            Ok [] ->
+            Just [] ->
                 Error "Face has no vertices"
 
-            Ok [ _ ] ->
+            Just [ _ ] ->
                 Error "Face has less than three vertices"
 
-            Ok [ _, _ ] ->
+            Just [ _, _ ] ->
                 Error "Face has less than three vertices"
 
-            Ok vertices ->
-                ElementData (FaceElement lineno vertices)
+            Just vertices ->
+                FaceElementData (FaceElement lineno vertices)
 
-            Err err ->
-                Error err
+            Nothing ->
+                Error "Invalid face format"
 
     else if String.startsWith "l " line then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
-            Ok [] ->
+            Just [] ->
                 Error "Line has no vertices"
 
-            Ok [ _ ] ->
+            Just [ _ ] ->
                 Error "Line has less than two vertices"
 
-            Ok vertices ->
-                ElementData (LineElement lineno vertices)
+            Just vertices ->
+                LineElementData (LineElement lineno vertices)
 
-            Err err ->
-                Error err
+            Nothing ->
+                Error "Invalid line format"
 
     else
         Skip
 
 
-parseVertices : List String -> List Vertex -> Result String (List Vertex)
+parseVertices : List String -> List Vertex -> Maybe (List Vertex)
 parseVertices list vertices =
     case list of
         first :: more ->
@@ -1305,10 +1262,10 @@ parseVertices list vertices =
                         (Vertex (p - 1) (Maybe.map (\x -> x - 1) uv) (Just (n - 1)) :: vertices)
 
                 _ ->
-                    Err "Invalid face format"
+                    Nothing
 
         [] ->
-            Ok (List.reverse vertices)
+            Just (List.reverse vertices)
 
 
 formatError : Int -> String -> Result String a
