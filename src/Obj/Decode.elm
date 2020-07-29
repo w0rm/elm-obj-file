@@ -669,7 +669,8 @@ groupIndices p1 more result =
             case rest of
                 p3 :: _ ->
                     -- Note that when it comes to grouping, the order of points is reversed
-                    groupIndices p1 rest (( p1, p3, p2 ) :: result)
+                    -- but the indices were reversed too, when parsing, so this is fine :-)
+                    groupIndices p1 rest (( p1, p2, p3 ) :: result)
 
                 _ ->
                     result
@@ -1039,12 +1040,13 @@ addPolylines settings elementGroups elements lineno vertices points result =
         [] ->
             let
                 newResult =
-                    case points of
-                        [] ->
-                            result
+                    if points == [] then
+                        result
 
-                        _ ->
-                            Polyline3d.fromVertices (List.reverse points) :: result
+                    else
+                        -- the points are reversed, but the original indices
+                        -- were reversed too in the parser
+                        Polyline3d.fromVertices points :: result
             in
             case elements of
                 (LineElement newLineno newVertices) :: remainingElements ->
@@ -1265,7 +1267,8 @@ parseVertices list vertices =
                     Nothing
 
         [] ->
-            Just (List.reverse vertices)
+            -- Note that this reverses vertices
+            Just vertices
 
 
 formatError : Int -> String -> Result String a
