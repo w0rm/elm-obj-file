@@ -219,7 +219,7 @@ material name =
 -- METADATA
 
 
-{-| Decode all object names within the current filter.
+{-| Decode a sorted list of object names within the current filter.
 -}
 objectNames : Decoder (List String)
 objectNames =
@@ -241,7 +241,7 @@ objectNames =
         )
 
 
-{-| Decode all group names within the current filter.
+{-| Decode a sorted list of group names within the current filter.
 -}
 groupNames : Decoder (List String)
 groupNames =
@@ -258,7 +258,7 @@ groupNames =
         )
 
 
-{-| Decode all material names within the current filter.
+{-| Decode a sorted list of material names within the current filter.
 -}
 materialNames : Decoder (List String)
 materialNames =
@@ -412,7 +412,7 @@ oneOfHelp vertexData filters elements decoders errors =
                 Err "Empty oneOf decoder"
 
             else
-                Err ("Failed oneOf decoder: '" ++ String.join "', '" (List.reverse errors) ++ "'.")
+                Err ("Failed oneOf decoder: " ++ String.join ", " (List.reverse errors) ++ ".")
 
         (Decoder decoder) :: remainingDecoders ->
             case decoder vertexData filters elements of
@@ -1227,6 +1227,10 @@ parseLine lineno units line =
             [] ->
                 Error "No groups specified"
 
+            [ "" ] ->
+                -- String.words "" == [""]
+                Error "No groups specified"
+
             groups_ ->
                 Property (GroupsProperty groups_)
 
@@ -1300,6 +1304,9 @@ parseLine lineno units line =
 parseVertices : List String -> List Vertex -> Maybe (List Vertex)
 parseVertices list vertices =
     case list of
+        "" :: more ->
+            parseVertices more vertices
+
         first :: more ->
             case List.map String.toInt (String.split "/" first) of
                 [ Just p ] ->
