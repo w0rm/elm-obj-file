@@ -79,6 +79,16 @@ parsing =
                 objFile { defaults | lineIndices = "1" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Err "Line 15: Line has less than two vertices")
+        , Test.test "fails for invalid points format" <|
+            \_ ->
+                objFile { defaults | pointsIndices = "invalid" }
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Err "Line 16: Invalid points format")
+        , Test.test "fails for points with no vertices" <|
+            \_ ->
+                objFile { defaults | pointsIndices = "" }
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Err "Line 16: Points element has no vertices")
         ]
 
 
@@ -91,6 +101,7 @@ type alias Settings =
     , normal : String
     , faceIndices : String
     , lineIndices : String
+    , pointsIndices : String
     }
 
 
@@ -104,11 +115,12 @@ defaults =
     , normal = "-1.0000 0.0000 0.0000"
     , faceIndices = "1/1/1 2/2/2 3/3/3"
     , lineIndices = "1/1 2/2 3/3"
+    , pointsIndices = "1 2 3"
     }
 
 
 objFile : Settings -> String
-objFile { objectName, groupNames, materialName, position, textureCoordinates, normal, faceIndices, lineIndices } =
+objFile { objectName, groupNames, materialName, position, textureCoordinates, normal, faceIndices, lineIndices, pointsIndices } =
     String.join "\n"
         [ "o " ++ objectName
         , "v -0.126193 0.126193 -0.126193"
@@ -125,4 +137,5 @@ objFile { objectName, groupNames, materialName, position, textureCoordinates, no
         , "s off"
         , "f " ++ faceIndices
         , "l " ++ lineIndices
+        , "p " ++ pointsIndices
         ]

@@ -13,7 +13,7 @@ objectNames =
     Test.describe "objectNames"
         [ Test.test "returns a list of object names from the file" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.objectNames
                     |> Expect.equal (Ok [ "Cube", "Lines" ])
         , Test.test "returns an empty list when no objects were found in a file" <|
@@ -29,7 +29,7 @@ materialNames =
     Test.describe "materialNames"
         [ Test.test "returns a list of material names from the file" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.materialNames
                     |> Expect.equal (Ok [ "Material1", "Material2" ])
         , Test.test "returns an empty list when no materials were found in a file" <|
@@ -45,7 +45,7 @@ groupNames =
     Test.describe "groupNames"
         [ Test.test "returns a list of group names from the file" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.groupNames
                     |> Expect.equal (Ok [ "Face2", "Face3", "Face4", "Face5", "Face6", "Faces", "default" ])
         , Test.test "returns an empty list when no groups were found in a file" <|
@@ -61,12 +61,12 @@ object =
     Test.describe "object"
         [ Test.test "decodes material names for a certain object" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.object "Cube" Decode.materialNames)
                     |> Expect.equal (Ok [ "Material1" ])
         , Test.test "the not found error contains object name" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.object "Lines" Decode.triangles)
                     |> Expect.equal (Err "No faces found for object 'Lines'")
         ]
@@ -77,12 +77,12 @@ material =
     Test.describe "material"
         [ Test.test "decodes object names for a certain material" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.material "Material2" Decode.objectNames)
                     |> Expect.equal (Ok [ "Lines" ])
         , Test.test "the not found error contains the material name" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.material "Material1" Decode.polylines)
                     |> Expect.equal (Err "No lines found for material 'Material1'")
         ]
@@ -93,7 +93,7 @@ defaultGroup =
     Test.describe "defaultGroup"
         [ Test.test "decodes triangles in the default group" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.defaultGroup Decode.triangles)
                     |> Result.map
                         (\triangularMesh ->
@@ -105,7 +105,7 @@ defaultGroup =
                     |> Expect.equal (Ok ( 4, 2 ))
         , Test.test "the not found error contains the default group name" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.defaultGroup Decode.polylines)
                     |> Expect.equal (Err "No lines found for group 'default'")
         ]
@@ -116,7 +116,7 @@ group =
     Test.describe "group"
         [ Test.test "decodes triangles in a group" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.group "Faces" Decode.triangles)
                     |> Result.map
                         (\triangularMesh ->
@@ -127,7 +127,7 @@ group =
                     |> Expect.equal (Ok ( 8, 10 ))
         , Test.test "the not found error contains the group name" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.group "Bla" Decode.faces)
                     |> Expect.equal (Err "No faces found for group 'Bla'")
         ]
@@ -138,7 +138,7 @@ filter =
     Test.describe "filter"
         [ Test.test "decodes triangles in selected groups" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.filter
                             (\{ groups } -> List.member "Face2" groups || List.member "Face3" groups)
@@ -153,14 +153,14 @@ filter =
                     |> Expect.equal (Ok ( 6, 4 ))
         , Test.test "the not found error contains <custom filter>" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.filter (\_ -> False) Decode.faces)
                     |> Expect.equal (Err "No faces found for <custom filter>")
         ]
 
 
-cubeAndPolylines : String
-cubeAndPolylines =
+objFile : String
+objFile =
     """# Blender v2.80 (sub 75) OBJ File: ''
 # www.blender.org
 mtllib untitled.mtl

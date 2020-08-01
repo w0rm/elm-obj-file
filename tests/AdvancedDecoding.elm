@@ -11,7 +11,7 @@ oneOf =
     Test.describe "oneOf"
         [ Test.test "lists error messages from all failed decoders" <|
             \_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.oneOf
                             [ Decode.object "missing-object" Decode.texturedFaces
@@ -21,13 +21,13 @@ oneOf =
                     |> Expect.equal (Err "Failed oneOf decoder: No faces found for object 'missing-object', Custom error.")
         , Test.test "fails when no decoders were provided"
             (\_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters (Decode.oneOf [])
                     |> Expect.equal (Err "Empty oneOf decoder")
             )
         , Test.test "succeedes with the first succesful decoder" <|
             \_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.oneOf
                             [ Decode.fail "error"
@@ -44,7 +44,7 @@ fail =
     Test.describe "fail"
         [ Test.test "fails with the given error message" <|
             \_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.fail "Unexpected")
                     |> Expect.equal (Err "Unexpected")
@@ -56,7 +56,7 @@ succeed =
     Test.describe "succeed"
         [ Test.test "succeeds with the given result" <|
             \_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.succeed "Success")
                     |> Expect.equal (Ok "Success")
@@ -68,7 +68,7 @@ andThen =
     Test.describe "andThen"
         [ Test.test "works for the successful case" <|
             \_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.succeed "Success"
                             |> Decode.andThen (\str -> Decode.succeed (str ++ " Success"))
@@ -82,7 +82,7 @@ combine =
     Test.describe "combine"
         [ Test.test "works for the successful case" <|
             \_ ->
-                singleFace
+                objFile
                     |> Decode.decodeString Length.centimeters
                         (Decode.combine
                             [ Decode.succeed "One"
@@ -94,8 +94,8 @@ combine =
         ]
 
 
-singleFace : String
-singleFace =
+objFile : String
+objFile =
     """o object1
 v -0.126193 0.126193 -0.126193
 v -0.126193 0.126193 0.126193

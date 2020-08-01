@@ -1,4 +1,4 @@
-module Primitives exposing (faces, polylines, texturedFaces, texturedTriangles, triangles)
+module Primitives exposing (faces, points, polylines, texturedFaces, texturedTriangles, triangles)
 
 import Array
 import Expect
@@ -15,7 +15,7 @@ triangles =
     Test.describe "triangles"
         [ Test.test "extracts all the vertices and indices" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.triangles
                     |> Result.map
                         (\triangularMesh ->
@@ -26,9 +26,9 @@ triangles =
                     |> Expect.equal (Ok ( 8, 12 ))
         , Test.test "fails when the position index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.triangles
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "fails when no faces were found" <|
             \_ ->
                 ""
@@ -47,7 +47,7 @@ faces =
     Test.describe "faces"
         [ Test.test "extracts all the vertices and indices" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.faces
                     |> Result.map
                         (\triangularMesh ->
@@ -58,19 +58,19 @@ faces =
                     |> Expect.equal (Ok ( 24, 12 ))
         , Test.test "errors when the position index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.faces
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the normal index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6/18/500 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 6/18/500 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.faces
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the normal index is missing" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6/18 5/19 1/20 2/11")
+                (objFile ++ "\nf 6/18 5/19 1/20 2/11")
                     |> Decode.decodeString Length.centimeters Decode.faces
-                    |> Expect.equal (Err "Line 52: Vertex has no normal vector")
+                    |> Expect.equal (Err "Line 54: Vertex has no normal vector")
         , Test.test "errors when no faces were found" <|
             \_ ->
                 ""
@@ -89,7 +89,7 @@ texturedTriangles =
     Test.describe "texturedTriangles"
         [ Test.test "extracts all the vertices and indices" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.texturedTriangles
                     |> Result.map
                         (\triangularMesh ->
@@ -100,19 +100,19 @@ texturedTriangles =
                     |> Expect.equal (Ok ( 20, 12 ))
         , Test.test "errors when the position index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.texturedTriangles
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the uv index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6/500/6 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 6/500/6 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.texturedTriangles
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the uv index is missing" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6//6 5//6 1//6 2//6")
+                (objFile ++ "\nf 6//6 5//6 1//6 2//6")
                     |> Decode.decodeString Length.centimeters Decode.texturedTriangles
-                    |> Expect.equal (Err "Line 52: Vertex has no texture coordinates")
+                    |> Expect.equal (Err "Line 54: Vertex has no texture coordinates")
         , Test.test "errors when no faces were found" <|
             \_ ->
                 ""
@@ -131,7 +131,7 @@ texturedFaces =
     Test.describe "texturedFaces"
         [ Test.test "extracts all the vertices and indices" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.texturedFaces
                     |> Result.map
                         (\triangularMesh ->
@@ -142,29 +142,29 @@ texturedFaces =
                     |> Expect.equal (Ok ( 24, 12 ))
         , Test.test "errors when the position index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 500/18/6 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.texturedFaces
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the normal index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6/18/500 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 6/18/500 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.texturedFaces
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the normal index is missing" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6/18 5/19 1/20 2/11")
+                (objFile ++ "\nf 6/18 5/19 1/20 2/11")
                     |> Decode.decodeString Length.centimeters Decode.texturedFaces
-                    |> Expect.equal (Err "Line 52: Vertex missing normal vector and/or texture coordinates")
+                    |> Expect.equal (Err "Line 54: Vertex missing normal vector and/or texture coordinates")
         , Test.test "errors when the uv index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6/500/6 5/19/6 1/20/6 2/11/6")
+                (objFile ++ "\nf 6/500/6 5/19/6 1/20/6 2/11/6")
                     |> Decode.decodeString Length.centimeters Decode.texturedFaces
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when the uv index is missing" <|
             \_ ->
-                (cubeAndPolylines ++ "\nf 6//6 5//6 1//6 2//6")
+                (objFile ++ "\nf 6//6 5//6 1//6 2//6")
                     |> Decode.decodeString Length.centimeters Decode.texturedFaces
-                    |> Expect.equal (Err "Line 52: Vertex missing normal vector and/or texture coordinates")
+                    |> Expect.equal (Err "Line 54: Vertex missing normal vector and/or texture coordinates")
         , Test.test "errors when no faces were found" <|
             \_ ->
                 ""
@@ -183,7 +183,7 @@ polylines =
     Test.describe "polylines"
         [ Test.test "extracts all points" <|
             \_ ->
-                cubeAndPolylines
+                objFile
                     |> Decode.decodeString Length.centimeters Decode.polylines
                     |> Expect.equal
                         (Ok
@@ -200,9 +200,9 @@ polylines =
                         )
         , Test.test "errors when the position index is out of range" <|
             \_ ->
-                (cubeAndPolylines ++ "\nl 500 5 1 2")
+                (objFile ++ "\nl 500 5 1 2")
                     |> Decode.decodeString Length.centimeters Decode.polylines
-                    |> Expect.equal (Err "Line 52: Index out of range")
+                    |> Expect.equal (Err "Line 54: Index out of range")
         , Test.test "errors when no lines were found" <|
             \_ ->
                 ""
@@ -216,8 +216,40 @@ polylines =
         ]
 
 
-cubeAndPolylines : String
-cubeAndPolylines =
+points : Test
+points =
+    Test.describe "points"
+        [ Test.test "extracts all points" <|
+            \_ ->
+                objFile
+                    |> Decode.decodeString Length.centimeters Decode.points
+                    |> Expect.equal
+                        (Ok
+                            [ Point3d.centimeters -1.260743 1.051649 1.526675
+                            , Point3d.centimeters -1.090024 1.399034 0.711974
+                            , Point3d.centimeters 1.0 1.0 -1.0
+                            ]
+                        )
+        , Test.test "errors when the position index is out of range" <|
+            \_ ->
+                (objFile ++ "\np 500 5 1 2")
+                    |> Decode.decodeString Length.centimeters Decode.points
+                    |> Expect.equal (Err "Line 54: Index out of range")
+        , Test.test "errors when no points were found" <|
+            \_ ->
+                ""
+                    |> Decode.decodeString Length.centimeters Decode.points
+                    |> Expect.equal (Err "No points found")
+        , Test.test "errors when no points were found matching specific filtering criteria" <|
+            \_ ->
+                ""
+                    |> Decode.decodeString Length.centimeters (Decode.object "Cube" (Decode.defaultGroup Decode.points))
+                    |> Expect.equal (Err "No points found for group 'default', object 'Cube'")
+        ]
+
+
+objFile : String
+objFile =
     """# Blender v2.80 (sub 75) OBJ File: ''
 # www.blender.org
 mtllib untitled.mtl
@@ -268,4 +300,6 @@ f 6/10/4 2/11/4 4/12/4 8/13/4
 f 2/14/5 1/15/5 3/16/5 4/17/5
 f 6/18/6 5/19/6 1/20/6 2/11/6
 l 9 10
-l 1 2 3"""
+l 1 2 3
+p 9 10
+p 1"""
