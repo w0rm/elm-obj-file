@@ -23,6 +23,14 @@ To export an OBJ file from Blender please refer to [the official manual](https:/
 
 If you want to use the shadow generation functionality from `elm-3d-scene`, your mesh needs to be watertight. Blender has the 3D Print Toolbox add-on, that lets you detect non manifold edges and fix them by clicking the “Make Manifold” button.
 
+Blender collections are not preserved in OBJ file groups. To decode individual meshes from the same file, you should rely on the `object` filter. The object name, that Blender produces, is a concatenation of the corresponding object and geometry. For example, the “Pod Body” object that contains “Mesh.001” can be decoded with `Obj.Decode.object "Pod_Body_Mesh.001"`.
+
+We recommend the following settings when exporting from Blender:
+
+* **Include:** only check “Objects as OBJ Objects”;
+* **Transform:** use scale `1.00`, “Y Forward” and “Z Up” to match the Blender coordinate system;
+* **Geometry:** only check “Apply Modifiers”, check “Write Normals” for `Obj.Decode.faces` and `Obj.Decode.texturedFaces`, “Include UVs” for `Obj.Decode.texturedTriangles` and `Obj.Decode.texturedFaces`.
+
 ## OBJ Format Support
 
 - [x] different combinations of positions, normal vectors and UV (texture coordinates);
