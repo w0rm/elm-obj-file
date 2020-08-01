@@ -138,12 +138,12 @@ decodeString units (Decoder decode) content =
     decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] []
 
 
-{-| Load a mesh from [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
+{-| Load a mesh from an [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
 
     getMesh : Cmd Msg
     getMesh =
         Http.get
-            { url = "Pod.obj"
+            { url = "Pod.obj.txt"
             , expect =
                 expectObj GotMesh
                     Length.centimeters
@@ -1311,11 +1311,11 @@ parseLine lineno units line =
     else if String.startsWith "g " line then
         case String.words (String.dropLeft 2 line) of
             [] ->
-                Error "No groups specified"
+                Property (GroupsProperty [ "default" ])
 
             [ "" ] ->
                 -- String.words "" == [""]
-                Error "No groups specified"
+                Property (GroupsProperty [ "default" ])
 
             groups_ ->
                 Property (GroupsProperty groups_)

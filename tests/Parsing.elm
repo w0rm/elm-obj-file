@@ -24,11 +24,11 @@ parsing =
                 objFile { defaults | objectName = "" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Err "Line 1: No object name")
-        , Test.test "fails for missing group names" <|
+        , Test.test "passes for missing group names" <|
             \_ ->
                 objFile { defaults | groupNames = "" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
-                    |> Expect.equal (Err "Line 11: No groups specified")
+                    |> Expect.equal (Ok "success")
         , Test.test "fails for a missing material name" <|
             \_ ->
                 objFile { defaults | materialName = "" }
