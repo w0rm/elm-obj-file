@@ -2,6 +2,10 @@
 
 An Elm package to decode 3D models from the [OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file). Meshes are returned as [`TriangularMesh`](https://package.elm-lang.org/packages/ianmackenzie/elm-triangular-mesh/latest) values, which makes them easy to render with [elm-3d-scene](https://package.elm-lang.org/packages/ianmackenzie/elm-3d-scene/latest) but can also be used with any other 3D graphics system. You could even take the geometric data and use it for 3D printing, physics simulations, [finite element analysis](https://en.wikipedia.org/wiki/Finite_element_method) or whatever other crazy thing you want to do =)
 
+![The “Pod” model by Kolja Wilcke](https://raw.githubusercontent.com/w0rm/elm-obj-file/master/examples/pod.png)
+
+_The “Pod” model by [@01k](https://mobile.twitter.com/01k) rendered with `elm-3d-scene`. [Check the source code here](https://github.com/w0rm/elm-obj-file/blob/master/examples/src/Pod.elm)._
+
 ```elm
 {-| Load a mesh from an HTTP request. -}
 getMesh : Cmd Msg
