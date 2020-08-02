@@ -17,12 +17,12 @@ module Obj.Decode exposing
 
 # Primitives
 
-elm-obj-file currently supports triangular meshes that may have normal vectors and/or texture coordinates. Support for points and line segments may be added in a future release.
+elm-obj-file supports triangular meshes that may have normal vectors and/or texture coordinates, polylines and points.
 
 By default, the geometrical data is returned in the `ObjCoordinates` [coordinate system](https://github.com/ianmackenzie/elm-geometry#coordinate-systems).
 It's also possible to [transform coordinates](#coordinate-conversion) if desired.
 
-Note that all primitive decoders require at least one face and will fail if no faces are found.
+Note that all primitive decoders require at least one element and will fail if no elements are found.
 
 @docs triangles, faces, texturedTriangles, texturedFaces, polylines, points
 
@@ -87,7 +87,7 @@ triangles =
     trianglesIn Frame3d.atOrigin
 
 
-{-| Decode positions and normals. Use with `Scene3d.Mesh.indexedFaces`.
+{-| Decode positions and normal vectors. Use with `Scene3d.Mesh.indexedFaces`.
 -}
 faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
 faces =
@@ -102,22 +102,20 @@ texturedTriangles =
     texturedTrianglesIn Frame3d.atOrigin
 
 
-{-| Decode positions, UV and normals. Use with `Scene3d.Mesh.texturedFaces`.
+{-| Decode positions, UV and normal vectors. Use with `Scene3d.Mesh.texturedFaces`.
 -}
 texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
 texturedFaces =
     texturedFacesIn Frame3d.atOrigin
 
 
-{-| Decode polylines.
--}
+{-| -}
 polylines : Decoder (List (Polyline3d Meters ObjCoordinates))
 polylines =
     polylinesIn Frame3d.atOrigin
 
 
-{-| Decode points.
--}
+{-| -}
 points : Decoder (List (Point3d Meters ObjCoordinates))
 points =
     pointsIn Frame3d.atOrigin
@@ -149,6 +147,8 @@ decodeString units (Decoder decode) content =
                     Length.centimeters
                     texturedFaces
             }
+
+Note: the .txt extension is required to work with `elm reactor`.
 
 -}
 expectObj : (Result Http.Error a -> msg) -> (Float -> Length) -> Decoder a -> Http.Expect msg
