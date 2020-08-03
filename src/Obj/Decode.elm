@@ -1406,8 +1406,70 @@ parseLine lineno units line =
             Nothing ->
                 Error "Invalid points format"
 
-    else
+    else if String.trim line == "" then
         Skip
+
+    else if List.any (\prefix -> String.startsWith prefix line) skipCommands then
+        Skip
+
+    else
+        Error
+            ("Invalid OBJ syntax '"
+                ++ (if String.length line > 20 then
+                        String.left 20 line ++ "...'"
+
+                    else
+                        line ++ "'"
+                   )
+            )
+
+
+skipCommands : List String
+skipCommands =
+    [ "#" -- comment
+
+    -- Grouping
+    , "s " -- smoothing group
+    , "mg " -- merging group
+
+    -- Display/render attributes
+    , "mtllib " -- material library
+    , "bevel " -- bevel interpolation
+    , "c_interp " -- color interpolation
+    , "d_interp " -- dissolve interpolation
+    , "lod " -- level of detail
+    , "shadow_obj " -- shadow casting
+    , "trace_obj " -- ray tracing
+    , "ctech " -- curve approximation technique
+    , "stech " -- surface approximation technique
+
+    -- Free-form curve/surface attributes
+    , "cstype " -- forms of curve or surface type
+    , "deg " -- degree
+    , "bmat " -- basis matrix
+    , "step " -- step size
+
+    -- Elements
+    , "curv " -- curve
+    , "curv2 " -- 2D curve
+    , "surf " -- surface
+
+    -- Free-form curve/surface body statements
+    , "parm " -- parameter values
+    , "trim " -- outer trimming loop
+    , "hole " -- inner trimming loop
+    , "scrv " -- special curve
+    , "sp " -- special point
+    , "end " -- end statement
+
+    -- Connectivity between free-form surfaces
+    , "con " -- connect
+
+    -- General statement
+    , "call "
+    , "scmp "
+    , "csh "
+    ]
 
 
 parseVertices : List String -> List Vertex -> Maybe (List Vertex)

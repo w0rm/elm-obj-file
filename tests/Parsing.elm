@@ -14,11 +14,21 @@ parsing =
                 ""
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Ok "success")
+        , Test.test "skips comments" <|
+            \_ ->
+                "# this is a comment"
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Ok "success")
         , Test.test "passes for valid format" <|
             \_ ->
                 objFile defaults
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Ok "success")
+        , Test.test "fails for invalid syntax" <|
+            \_ ->
+                "%PDF-1.2"
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Err "Line 1: Invalid OBJ syntax '%PDF-1.2'")
         , Test.test "fails for a missing object name" <|
             \_ ->
                 objFile { defaults | objectName = "" }
