@@ -1,9 +1,9 @@
 module Viewer exposing (main)
 
-{-| This example demonstrates how to load a mesh from file.
+{-| This example demonstrates how to load a mesh from a file.
 It can also be used to test the parser :-)
 
-Check <http://people.math.sc.edu/Burkardt/data/obj/obj.html> for sample obj files
+Now try dragging and dropping some OBJ files from <http://people.math.sc.edu/Burkardt/data/obj/obj.html>!
 
 -}
 
