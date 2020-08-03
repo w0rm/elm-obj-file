@@ -66,7 +66,7 @@ withBoundingBox getPosition createMesh =
                     BoundingBox3d.hull first rest
 
                 [] ->
-                    BoundingBox3d.hull Point3d.origin []
+                    BoundingBox3d.singleton Point3d.origin
             )
         )
 
