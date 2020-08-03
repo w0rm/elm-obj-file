@@ -36,8 +36,6 @@ import WebGL.Texture exposing (Error(..))
 
 type ViewMesh
     = ViewTextured (Textured ObjCoordinates)
-    | ViewUnlit (Unlit ObjCoordinates)
-    | ViewPlain (Plain ObjCoordinates)
     | ViewUniform (Uniform ObjCoordinates)
 
 
@@ -60,9 +58,9 @@ viewMesh =
             Obj.Decode.texturedFaces
         , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewUniform (Scene3d.Mesh.indexedFaces triangularMesh) ))
             Obj.Decode.faces
-        , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewUnlit (Scene3d.Mesh.texturedTriangles triangularMesh) ))
+        , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewTextured (Scene3d.Mesh.texturedFacets triangularMesh) ))
             Obj.Decode.texturedTriangles
-        , Obj.Decode.map (\triangularMesh -> ( boundingBox identity triangularMesh, ViewPlain (Scene3d.Mesh.indexedTriangles triangularMesh) ))
+        , Obj.Decode.map (\triangularMesh -> ( boundingBox identity triangularMesh, ViewUniform (Scene3d.Mesh.indexedFacets triangularMesh) ))
             Obj.Decode.triangles
         ]
 
@@ -290,19 +288,6 @@ view model =
                                             Scene3d.mesh (Scene3d.Material.matte Color.blue)
                                                 texturedMesh
 
-                                ViewUnlit unlitMesh ->
-                                    case model.texture of
-                                        Loaded texture ->
-                                            Scene3d.mesh (Scene3d.Material.texturedColor texture)
-                                                unlitMesh
-
-                                        _ ->
-                                            Scene3d.mesh (Scene3d.Material.color Color.blue)
-                                                unlitMesh
-
-                                ViewPlain plainMesh ->
-                                    Scene3d.mesh (Scene3d.Material.color Color.blue)
-                                        plainMesh
 
                                 ViewUniform uniformMesh ->
                                     Scene3d.mesh (Scene3d.Material.matte Color.blue)
