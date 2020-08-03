@@ -216,6 +216,10 @@ view model =
         , Html.Attributes.style "top" "0"
         , Html.Attributes.style "width" "100%"
         , Html.Attributes.style "height" "100%"
+        , hijackOn "dragenter" (Json.Decode.succeed DragEnter)
+        , hijackOn "dragover" (Json.Decode.succeed DragEnter)
+        , hijackOn "dragleave" (Json.Decode.succeed DragLeave)
+        , hijackOn "drop" dropDecoder
         ]
         [ Html.div
             [ Html.Attributes.style "border"
@@ -238,10 +242,6 @@ view model =
             , Html.Attributes.style "flex-direction" "column"
             , Html.Attributes.style "display" "flex"
             , Html.Attributes.style "position" "relative"
-            , hijackOn "dragenter" (Json.Decode.succeed DragEnter)
-            , hijackOn "dragover" (Json.Decode.succeed DragEnter)
-            , hijackOn "dragleave" (Json.Decode.succeed DragLeave)
-            , hijackOn "drop" dropDecoder
             ]
             (case maybeMesh of
                 Nothing ->
