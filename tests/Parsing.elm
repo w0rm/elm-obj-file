@@ -34,14 +34,29 @@ parsing =
                 objFile { defaults | materialName = "" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Err "Line 12: No material name")
+        , Test.test "passes for position with weight" <|
+            \_ ->
+                objFile { defaults | position = "-0.126193 0.126193 0.126193 1.000000" }
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Ok "success")
         , Test.test "fails for invalid position format" <|
             \_ ->
                 objFile { defaults | position = "-0.126193 0.126193" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Err "Line 3: Invalid position format")
-        , Test.test "fails for invalid texture coordinates format" <|
+        , Test.test "passes for texture coordinates with depth" <|
+            \_ ->
+                objFile { defaults | textureCoordinates = "0.128224 0.902035 0.000000" }
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Ok "success")
+        , Test.test "passes for texture coordinates with just u" <|
             \_ ->
                 objFile { defaults | textureCoordinates = "-0.126193" }
+                    |> Decode.decodeString Length.centimeters (Decode.succeed "success")
+                    |> Expect.equal (Ok "success")
+        , Test.test "fails for invalid texture coordinates format" <|
+            \_ ->
+                objFile { defaults | textureCoordinates = "bla" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
                     |> Expect.equal (Err "Line 6: Invalid texture coordinates format")
         , Test.test "fails for invalid normal vector format" <|

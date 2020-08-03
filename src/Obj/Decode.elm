@@ -1333,6 +1333,10 @@ parseLine lineno units line =
             [ Just x, Just y, Just z ] ->
                 PositionData (Point3d.xyz (units x) (units y) (units z))
 
+            [ Just x, Just y, Just z, _ ] ->
+                -- skip the optional weight, that is only required for rational curves and surfaces
+                PositionData (Point3d.xyz (units x) (units y) (units z))
+
             _ ->
                 Error "Invalid position format"
 
@@ -1340,6 +1344,14 @@ parseLine lineno units line =
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
             [ Just x, Just y ] ->
                 UvData ( x, y )
+
+            [ Just u, Just v, _ ] ->
+                -- skip the optional depth of the texture
+                UvData ( u, v )
+
+            [ Just u ] ->
+                -- set the default v=0 if it is missing
+                UvData ( u, 0 )
 
             _ ->
                 Error "Invalid texture coordinates format"
