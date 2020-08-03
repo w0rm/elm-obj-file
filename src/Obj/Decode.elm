@@ -1308,8 +1308,8 @@ parseLine lineno units line =
             object_ ->
                 Property (ObjectProperty object_)
 
-    else if String.startsWith "g " line then
-        case String.words (String.dropLeft 2 line) of
+    else if String.startsWith "g " line || line == "g" then
+        case String.words (String.dropLeft 1 line) of
             [] ->
                 Property (GroupsProperty [ "default" ])
 
