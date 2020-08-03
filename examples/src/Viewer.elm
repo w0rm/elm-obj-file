@@ -2,9 +2,14 @@ module Viewer exposing (main)
 
 {-| This example demonstrates how to load a mesh from file.
 It can also be used to test the parser :-)
+
+Check <http://people.math.sc.edu/Burkardt/data/obj/obj.html> for sample obj files
+
 -}
 
 import Angle
+import Array
+import BoundingBox3d exposing (BoundingBox3d)
 import Browser
 import Camera3d
 import Color exposing (Color)
@@ -15,14 +20,16 @@ import Html exposing (Attribute, Html)
 import Html.Attributes
 import Html.Events
 import Json.Decode
-import Length
+import Length exposing (Meters)
 import Obj.Decode exposing (Decoder, ObjCoordinates)
 import Pixels
 import Point3d
+import Quantity
 import Scene3d
 import Scene3d.Material exposing (Texture)
 import Scene3d.Mesh exposing (Plain, Textured, Uniform, Unlit)
 import Task
+import TriangularMesh
 import Viewpoint3d
 import WebGL.Texture exposing (Error(..))
 
@@ -37,16 +44,25 @@ type ViewMesh
 {-| Because we don’t know the exect format of mesh, we try decoding different
 primitives: from the most specific to the most simple one.
 -}
-viewMesh : Decoder ViewMesh
+viewMesh : Decoder ( BoundingBox3d Meters ObjCoordinates, ViewMesh )
 viewMesh =
+    let
+        boundingBox position triangularMesh =
+            case List.map position (Array.toList (TriangularMesh.vertices triangularMesh)) of
+                first :: rest ->
+                    BoundingBox3d.hull first rest
+
+                [] ->
+                    BoundingBox3d.hull Point3d.origin []
+    in
     Obj.Decode.oneOf
-        [ Obj.Decode.map (Scene3d.Mesh.texturedFaces >> ViewTextured)
+        [ Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewTextured (Scene3d.Mesh.texturedFaces triangularMesh) ))
             Obj.Decode.texturedFaces
-        , Obj.Decode.map (Scene3d.Mesh.indexedFaces >> ViewUniform)
+        , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewUniform (Scene3d.Mesh.indexedFaces triangularMesh) ))
             Obj.Decode.faces
-        , Obj.Decode.map (Scene3d.Mesh.texturedTriangles >> ViewUnlit)
+        , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewUnlit (Scene3d.Mesh.texturedTriangles triangularMesh) ))
             Obj.Decode.texturedTriangles
-        , Obj.Decode.map (Scene3d.Mesh.indexedTriangles >> ViewPlain)
+        , Obj.Decode.map (\triangularMesh -> ( boundingBox identity triangularMesh, ViewPlain (Scene3d.Mesh.indexedTriangles triangularMesh) ))
             Obj.Decode.triangles
         ]
 
@@ -59,7 +75,7 @@ type LoadState a
 
 type alias Model =
     { texture : LoadState (Texture Color)
-    , mesh : LoadState ViewMesh
+    , mesh : LoadState ( BoundingBox3d Meters ObjCoordinates, ViewMesh )
     , hover : Bool
     }
 
@@ -70,7 +86,7 @@ type Msg
     | DragEnter
     | DragLeave
     | LoadedTexture (Result WebGL.Texture.Error (Texture Color))
-    | LoadedMesh (Result String ViewMesh)
+    | LoadedMesh (Result String ( BoundingBox3d Meters ObjCoordinates, ViewMesh ))
     | GotFiles File (List File)
 
 
@@ -174,18 +190,6 @@ update msg model =
 view : Model -> Html Msg
 view model =
     let
-        camera =
-            Camera3d.perspective
-                { viewpoint =
-                    Viewpoint3d.orbitZ
-                        { focalPoint = Point3d.origin
-                        , azimuth = Angle.degrees -45
-                        , elevation = Angle.degrees 35
-                        , distance = Length.meters 16
-                        }
-                , verticalFieldOfView = Angle.degrees 30
-                }
-
         maybeMesh =
             case model.mesh of
                 Loaded m ->
@@ -252,8 +256,28 @@ view model =
                         [ Html.text "select an OBJ file and/or an image" ]
                     ]
 
-                Just mesh ->
+                Just ( boundingBox, mesh ) ->
                     let
+                        { minX, maxX, minY, maxY, minZ, maxZ } =
+                            BoundingBox3d.extrema boundingBox
+
+                        distance =
+                            List.map Quantity.abs [ minX, maxX, minY, maxY, minZ, maxZ ]
+                                |> List.foldl Quantity.max Quantity.zero
+                                |> Quantity.multiplyBy 4
+
+                        camera =
+                            Camera3d.perspective
+                                { viewpoint =
+                                    Viewpoint3d.orbitZ
+                                        { focalPoint = BoundingBox3d.centerPoint boundingBox
+                                        , azimuth = Angle.degrees -45
+                                        , elevation = Angle.degrees 35
+                                        , distance = distance
+                                        }
+                                , verticalFieldOfView = Angle.degrees 30
+                                }
+
                         entity =
                             case mesh of
                                 ViewTextured texturedMesh ->
