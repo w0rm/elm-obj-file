@@ -23,46 +23,52 @@ import Json.Decode
 import Length exposing (Meters)
 import Obj.Decode exposing (Decoder, ObjCoordinates)
 import Pixels
-import Point3d
+import Point3d exposing (Point3d)
 import Quantity
 import Scene3d
 import Scene3d.Material exposing (Texture)
-import Scene3d.Mesh exposing (Plain, Textured, Uniform, Unlit)
+import Scene3d.Mesh exposing (Textured, Uniform)
 import Task
-import TriangularMesh
+import TriangularMesh exposing (TriangularMesh)
 import Viewpoint3d
 import WebGL.Texture exposing (Error(..))
 
 
 type ViewMesh
-    = ViewTextured (Textured ObjCoordinates)
-    | ViewUniform (Uniform ObjCoordinates)
+    = TexturedMesh (Textured ObjCoordinates)
+    | UniformMesh (Uniform ObjCoordinates)
 
 
-{-| Because we don’t know the exect format of mesh, we try decoding different
+{-| Because we don’t know the exect format of a mesh, we try decoding different
 primitives: from the most specific to the most simple one.
 -}
-viewMesh : Decoder ( BoundingBox3d Meters ObjCoordinates, ViewMesh )
-viewMesh =
-    let
-        boundingBox position triangularMesh =
-            case List.map position (Array.toList (TriangularMesh.vertices triangularMesh)) of
+meshWithBoundingBoxDecoder : Decoder ( ViewMesh, BoundingBox3d Meters ObjCoordinates )
+meshWithBoundingBoxDecoder =
+    Obj.Decode.oneOf
+        [ withBoundingBox .position (Scene3d.Mesh.texturedFaces >> TexturedMesh) Obj.Decode.texturedFaces
+        , withBoundingBox .position (Scene3d.Mesh.indexedFaces >> UniformMesh) Obj.Decode.faces
+        , withBoundingBox .position (Scene3d.Mesh.texturedFacets >> TexturedMesh) Obj.Decode.texturedTriangles
+        , withBoundingBox identity (Scene3d.Mesh.indexedFacets >> UniformMesh) Obj.Decode.triangles
+        ]
+
+
+withBoundingBox :
+    (a -> Point3d Meters ObjCoordinates) -- a function that knows how to extract position of a vertex
+    -> (TriangularMesh a -> ViewMesh) -- a function that knows how to create a ViewMesh
+    -> Decoder (TriangularMesh a) -- a primitive decoder
+    -> Decoder ( ViewMesh, BoundingBox3d Meters ObjCoordinates )
+withBoundingBox getPosition createMesh =
+    Obj.Decode.map
+        (\triangularMesh ->
+            ( createMesh triangularMesh
+            , case List.map getPosition (Array.toList (TriangularMesh.vertices triangularMesh)) of
                 first :: rest ->
                     BoundingBox3d.hull first rest
 
                 [] ->
                     BoundingBox3d.hull Point3d.origin []
-    in
-    Obj.Decode.oneOf
-        [ Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewTextured (Scene3d.Mesh.texturedFaces triangularMesh) ))
-            Obj.Decode.texturedFaces
-        , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewUniform (Scene3d.Mesh.indexedFaces triangularMesh) ))
-            Obj.Decode.faces
-        , Obj.Decode.map (\triangularMesh -> ( boundingBox .position triangularMesh, ViewTextured (Scene3d.Mesh.texturedFacets triangularMesh) ))
-            Obj.Decode.texturedTriangles
-        , Obj.Decode.map (\triangularMesh -> ( boundingBox identity triangularMesh, ViewUniform (Scene3d.Mesh.indexedFacets triangularMesh) ))
-            Obj.Decode.triangles
-        ]
+            )
+        )
 
 
 type LoadState a
@@ -73,7 +79,7 @@ type LoadState a
 
 type alias Model =
     { texture : LoadState (Texture Color)
-    , mesh : LoadState ( BoundingBox3d Meters ObjCoordinates, ViewMesh )
+    , meshWithBoundingBox : LoadState ( ViewMesh, BoundingBox3d Meters ObjCoordinates )
     , hover : Bool
     }
 
@@ -84,22 +90,25 @@ type Msg
     | DragEnter
     | DragLeave
     | LoadedTexture (Result WebGL.Texture.Error (Texture Color))
-    | LoadedMesh (Result String ( BoundingBox3d Meters ObjCoordinates, ViewMesh ))
+    | LoadedMesh (Result String ( ViewMesh, BoundingBox3d Meters ObjCoordinates ))
     | GotFiles File (List File)
 
 
-init : () -> ( Model, Cmd Msg )
-init () =
-    ( { mesh = Empty, texture = Empty, hover = False }
-    , Cmd.none
-    )
+main : Program () Model Msg
+main =
+    Browser.element
+        { init = always ( Model Empty Empty False, Cmd.none )
+        , update = update
+        , view = view
+        , subscriptions = always Sub.none
+        }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         ResetClicked ->
-            ( { model | texture = Empty, mesh = Empty }, Cmd.none )
+            ( { model | texture = Empty, meshWithBoundingBox = Empty }, Cmd.none )
 
         PickClicked ->
             ( model, File.Select.files [] GotFiles )
@@ -114,23 +123,23 @@ update msg model =
             let
                 ( imageFiles, objFiles ) =
                     List.partition
-                        (\f -> String.startsWith "image/" (File.mime f))
+                        (File.mime >> String.startsWith "image/")
                         (file :: files)
 
-                loadTexture =
+                loadTextureCmd =
                     case imageFiles of
                         textureFile :: _ ->
                             File.toUrl textureFile
                                 |> Task.andThen
-                                    (\url ->
-                                        Scene3d.Material.loadWith Scene3d.Material.nearestNeighborFiltering url
+                                    (Scene3d.Material.loadWith
+                                        Scene3d.Material.nearestNeighborFiltering
                                     )
                                 |> Task.attempt LoadedTexture
 
-                        _ ->
+                        [] ->
                             Cmd.none
 
-                loadMesh =
+                loadAndDecodeMeshCmd =
                     case objFiles of
                         objFile :: _ ->
                             File.toString objFile
@@ -139,7 +148,7 @@ update msg model =
                                         case
                                             Obj.Decode.decodeString
                                                 Length.meters
-                                                viewMesh
+                                                meshWithBoundingBoxDecoder
                                                 string
                                         of
                                             Ok m ->
@@ -150,14 +159,14 @@ update msg model =
                                     )
                                 |> Task.attempt LoadedMesh
 
-                        _ ->
+                        [] ->
                             Cmd.none
             in
-            ( { model | hover = False }, Cmd.batch [ loadTexture, loadMesh ] )
+            ( { model | hover = False }, Cmd.batch [ loadTextureCmd, loadAndDecodeMeshCmd ] )
 
         LoadedMesh result ->
             ( { model
-                | mesh =
+                | meshWithBoundingBox =
                     case result of
                         Err err ->
                             Error err
@@ -185,31 +194,61 @@ update msg model =
             )
 
 
-view : Model -> Html Msg
-view model =
+meshView : BoundingBox3d Meters ObjCoordinates -> LoadState (Texture Color) -> ViewMesh -> Html Msg
+meshView boundingBox loadingTexture mesh =
     let
-        maybeMesh =
-            case model.mesh of
-                Loaded m ->
-                    Just m
+        { minX, maxX, minY, maxY, minZ, maxZ } =
+            BoundingBox3d.extrema boundingBox
 
-                _ ->
-                    Nothing
+        distance =
+            List.map Quantity.abs [ minX, maxX, minY, maxY, minZ, maxZ ]
+                |> List.foldl Quantity.max Quantity.zero
+                |> Quantity.multiplyBy 4
 
-        maybeMeshError =
-            case model.mesh of
-                Error m ->
-                    Just m
+        camera =
+            Camera3d.perspective
+                { viewpoint =
+                    Viewpoint3d.orbitZ
+                        { focalPoint = BoundingBox3d.centerPoint boundingBox
+                        , azimuth = Angle.degrees -45
+                        , elevation = Angle.degrees 35
+                        , distance = distance
+                        }
+                , verticalFieldOfView = Angle.degrees 30
+                }
 
-                _ ->
-                    Nothing
+        entity =
+            case mesh of
+                TexturedMesh texturedMesh ->
+                    case loadingTexture of
+                        Loaded texture ->
+                            Scene3d.mesh (Scene3d.Material.texturedMatte texture) texturedMesh
+
+                        Error _ ->
+                            Scene3d.mesh (Scene3d.Material.matte Color.red) texturedMesh
+
+                        _ ->
+                            Scene3d.mesh (Scene3d.Material.matte Color.blue) texturedMesh
+
+                UniformMesh uniformMesh ->
+                    Scene3d.mesh (Scene3d.Material.matte Color.blue) uniformMesh
     in
-    Html.div
-        [ Html.Attributes.style "align-items" "center"
-        , Html.Attributes.style "justify-content" "center"
-        , Html.Attributes.style "flex-direction" "column"
-        , Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "position" "absolute"
+    Scene3d.sunny
+        { upDirection = Direction3d.z
+        , sunlightDirection = Direction3d.negativeZ
+        , shadows = False
+        , camera = camera
+        , dimensions = ( Pixels.int 640, Pixels.int 640 )
+        , background = Scene3d.transparentBackground
+        , clipDepth = Length.meters 0.1
+        , entities = [ entity ]
+        }
+
+
+view : Model -> Html Msg
+view { hover, meshWithBoundingBox, texture } =
+    centeredContents
+        [ Html.Attributes.style "position" "absolute"
         , Html.Attributes.style "left" "0"
         , Html.Attributes.style "top" "0"
         , Html.Attributes.style "width" "100%"
@@ -219,90 +258,40 @@ view model =
         , hijackOn "dragleave" (Json.Decode.succeed DragLeave)
         , hijackOn "drop" dropDecoder
         ]
-        [ Html.div
+        [ centeredContents
             [ Html.Attributes.style "border"
-                (if model.hover then
-                    "3px dashed green"
+                (case ( hover, meshWithBoundingBox ) of
+                    ( True, _ ) ->
+                        "3px dashed green"
 
-                 else
-                    case model.mesh of
-                        Loaded _ ->
-                            "3px dashed rgb(52, 101, 164)"
+                    ( False, Loaded _ ) ->
+                        "3px dashed rgb(52, 101, 164)"
 
-                        _ ->
-                            "3px dashed #ccc"
+                    ( False, Error _ ) ->
+                        "3px dashed red"
+
+                    _ ->
+                        "3px dashed #ccc"
                 )
             , Html.Attributes.style "width" "640px"
             , Html.Attributes.style "height" "640px"
-            , Html.Attributes.style "margin" "0 0 10px"
-            , Html.Attributes.style "align-items" "center"
-            , Html.Attributes.style "justify-content" "center"
-            , Html.Attributes.style "flex-direction" "column"
-            , Html.Attributes.style "display" "flex"
             , Html.Attributes.style "position" "relative"
             ]
-            (case maybeMesh of
-                Nothing ->
-                    [ case maybeMeshError of
-                        Just err ->
-                            Html.p [ Html.Attributes.style "color" "red" ]
-                                [ Html.text err ]
-
-                        Nothing ->
-                            Html.text ""
-                    , Html.button [ Html.Events.onClick PickClicked ]
+            (case meshWithBoundingBox of
+                Empty ->
+                    [ Html.button [ Html.Events.onClick PickClicked ]
                         [ Html.text "select an OBJ file and/or an image" ]
                     ]
 
-                Just ( boundingBox, mesh ) ->
-                    let
-                        { minX, maxX, minY, maxY, minZ, maxZ } =
-                            BoundingBox3d.extrema boundingBox
+                Error err ->
+                    [ Html.p [ Html.Attributes.style "color" "red" ]
+                        [ Html.text err ]
+                    , Html.button [ Html.Events.onClick PickClicked ]
+                        [ Html.text "try a different OBJ file" ]
+                    ]
 
-                        distance =
-                            List.map Quantity.abs [ minX, maxX, minY, maxY, minZ, maxZ ]
-                                |> List.foldl Quantity.max Quantity.zero
-                                |> Quantity.multiplyBy 4
-
-                        camera =
-                            Camera3d.perspective
-                                { viewpoint =
-                                    Viewpoint3d.orbitZ
-                                        { focalPoint = BoundingBox3d.centerPoint boundingBox
-                                        , azimuth = Angle.degrees -45
-                                        , elevation = Angle.degrees 35
-                                        , distance = distance
-                                        }
-                                , verticalFieldOfView = Angle.degrees 30
-                                }
-
-                        entity =
-                            case mesh of
-                                ViewTextured texturedMesh ->
-                                    case model.texture of
-                                        Loaded texture ->
-                                            Scene3d.mesh (Scene3d.Material.texturedMatte texture)
-                                                texturedMesh
-
-                                        _ ->
-                                            Scene3d.mesh (Scene3d.Material.matte Color.blue)
-                                                texturedMesh
-
-
-                                ViewUniform uniformMesh ->
-                                    Scene3d.mesh (Scene3d.Material.matte Color.blue)
-                                        uniformMesh
-                    in
-                    [ Scene3d.sunny
-                        { upDirection = Direction3d.z
-                        , sunlightDirection = Direction3d.negativeZ
-                        , shadows = True
-                        , camera = camera
-                        , dimensions = ( Pixels.int 640, Pixels.int 640 )
-                        , background = Scene3d.transparentBackground
-                        , clipDepth = Length.meters 0.1
-                        , entities = [ entity ]
-                        }
+                Loaded ( mesh, boundingBox ) ->
+                    [ meshView boundingBox texture mesh
                     , Html.button
                         [ Html.Attributes.style "position" "absolute"
                         , Html.Attributes.style "right" "10px"
@@ -315,14 +304,16 @@ view model =
         ]
 
 
-main : Program () Model Msg
-main =
-    Browser.element
-        { init = init
-        , update = update
-        , view = view
-        , subscriptions = always Sub.none
-        }
+centeredContents : List (Attribute msg) -> List (Html msg) -> Html msg
+centeredContents attributes =
+    Html.div
+        ([ Html.Attributes.style "align-items" "center"
+         , Html.Attributes.style "justify-content" "center"
+         , Html.Attributes.style "display" "flex"
+         , Html.Attributes.style "flex-direction" "column"
+         ]
+            ++ attributes
+        )
 
 
 dropDecoder : Json.Decode.Decoder Msg
@@ -333,9 +324,5 @@ dropDecoder =
 
 hijackOn : String -> Json.Decode.Decoder msg -> Attribute msg
 hijackOn event decoder =
-    Html.Events.preventDefaultOn event (Json.Decode.map hijack decoder)
-
-
-hijack : msg -> ( msg, Bool )
-hijack msg =
-    ( msg, True )
+    Html.Events.preventDefaultOn event
+        (Json.Decode.map (\val -> ( val, True )) decoder)
