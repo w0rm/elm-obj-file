@@ -139,7 +139,8 @@ points =
 {-| Run the decoder on the string. Takes a function, that knows
 how to convert float coordinates into physical units.
 
-    decodeString Length.centimeters texturedFaces string
+    decodeString Length.meters triangles string == Ok (TriangularMesh {...})
+    decodeString Length.meters triangles string == Err "Line 1: Invalid OBJ syntax '...'"
 
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
@@ -149,14 +150,17 @@ decodeString units (Decoder decode) content =
 
 {-| Load a mesh from an [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
 
+    type Msg
+        = GotMesh (Result Http.Error (TriangularMesh (Point3d Meters ObjCoordinates)))
+
     getMesh : Cmd Msg
     getMesh =
         Http.get
             { url = "Pod.obj.txt"
             , expect =
                 expectObj GotMesh
-                    Length.centimeters
-                    texturedFaces
+                    Length.meters
+                    triangles
             }
 
 Note: the .txt extension is required to work with `elm reactor`.
@@ -194,6 +198,7 @@ expectObj toMsg units decoder =
 
 {-| Decode data for the given object name.
 
+    wheels : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
     wheels =
         object "wheels" triangles
 
@@ -321,15 +326,16 @@ map fn (Decoder decoder) =
 
 {-| Join the result from two decoders. This lets you extract parts of the same OBJ file into separate meshes.
 
+    type alias Car =
+        { wheels : TriangularMesh (Point3d Meters ObjCoordinates)
+        , base : TriangularMesh (Point3d Meters ObjCoordinates)
+        }
+
+    carDecoder : Decoder Car
     carDecoder =
-        map2
-            (\wheels base ->
-                { wheels = wheels
-                , base = base
-                }
-            )
-            wheelsDecoder
-            baseDecoder
+        map2 Car
+            (object "wheels" triangles)
+            (object "base" triangles)
 
 -}
 map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
@@ -482,23 +488,26 @@ andThen fn (Decoder decoderA) =
         )
 
 
-{-| Combine multiple decoders together. An example use case is when you want
-to extract meshes for all materials:
+{-| Combine multiple decoders together. For example, to extract meshes for all materials:
 
-    -- Decode triangles for selected materials
+    type alias MeshWithMaterial =
+        ( String, TriangularMesh (Point3d Meters ObjCoordinates) )
+
+    trianglesForMaterials : String -> Decode (List MeshWithMaterial)
     trianglesForMaterials names =
         names
             |> List.map
-                (\name ->
-                    map (\triangles -> ( name, triangles ))
-                        (material name triangles)
+                (\materialName ->
+                    material materialName triangles
+                        |> map (\mesh -> ( materialName, mesh ))
                 )
             |> combine
 
-    -- Decode materials, and then decode
+    -- Decode material names, and then decode
     -- triangles for these materials
+    withMaterials : Decode (List MeshWithMaterial)
     withMaterials =
-        materials |> andThen trianglesForMaterials
+        materialNames |> andThen trianglesForMaterials
 
 -}
 combine : List (Decoder a) -> Decoder (List a)
@@ -533,13 +542,18 @@ type ObjCoordinates
 {-| Transform coordinates when decoding. For example, if you need to render a mesh with Z-up,
 but it was exported with Y-up:
 
+    type ZUpCoords
+        = ZUpCoords
+
+    yUpToZUpFrame : Frame3d Meters ZUpCoords { defines : ObjCoordinates }
     yUpToZUpFrame =
         Frame3d.atOrigin
             |> Frame3d.rotateAround
                 Axis3d.x
                 (Angle.degrees 90)
 
-    yUpToZUpTriangles =
+    zUpTriangles : Decoder (TriangularMesh (Point3d Meters ZUpCoords))
+    zUpTriangles =
         trianglesIn yUpToZUpFrame
 
 -}
