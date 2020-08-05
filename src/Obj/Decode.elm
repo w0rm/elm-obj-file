@@ -34,10 +34,21 @@ Note that all primitive decoders require at least one element and will fail if n
 
 # Filtering
 
+Primitives within OBJ files can be tagged with metadata such as object name, group names and materials.
+
+Using the filtering decoders, you can selectively decode based on this metadata.
+
+For advanced filtering rules check the [`filter`](#filter) decoder.
+
 @docs object, group, defaultGroup, material
 
 
 # Metadata
+
+Decode useful information other than primitives. This can be useful to inspect the contents of the file.
+
+Metadata decoders can be also composed with advanced decoders [`andThen`](#andThen) and
+[`combine`](#combine) to first get the metadata, and then filter the primitives.
 
 @docs objectNames, groupNames, materialNames
 
@@ -181,11 +192,7 @@ expectObj toMsg units decoder =
 -- FILTERING
 
 
-{-| Decode the data for the object. You may decode multiple objects from the same OBJ file.
-Like the car base and car wheels.
-
-    base =
-        object "base" triangles
+{-| Decode data for the given object name.
 
     wheels =
         object "wheels" triangles
@@ -196,15 +203,15 @@ object name =
     filterHelp ("object '" ++ name ++ "'") (\properties -> properties.object == Just name)
 
 
-{-| Decode the data for the certain group.
+{-| Decode data for the given group name.
 -}
 group : String -> Decoder a -> Decoder a
 group name =
     filterHelp ("group '" ++ name ++ "'") (\properties -> List.member name properties.groups)
 
 
-{-| Decode the default group. This group has a special meaning,
-all triangles are assigned to it if a group is not specified.
+{-| Decode data for the default group. This group has a special meaning,
+all elements are assigned to it if a group is not specified.
 
     defaultGroup =
         group "default"
@@ -215,7 +222,7 @@ defaultGroup =
     group "default"
 
 
-{-| Decode the material.
+{-| Decode data for the given material name.
 -}
 material : String -> Decoder a -> Decoder a
 material name =
@@ -226,7 +233,7 @@ material name =
 -- METADATA
 
 
-{-| Decode a sorted list of object names within the current filter.
+{-| Decode a sorted list of object names.
 -}
 objectNames : Decoder (List String)
 objectNames =
@@ -248,7 +255,7 @@ objectNames =
         )
 
 
-{-| Decode a sorted list of group names within the current filter.
+{-| Decode a sorted list of group names.
 -}
 groupNames : Decoder (List String)
 groupNames =
@@ -265,7 +272,7 @@ groupNames =
         )
 
 
-{-| Decode a sorted list of material names within the current filter.
+{-| Decode a sorted list of material names.
 -}
 materialNames : Decoder (List String)
 materialNames =
@@ -291,7 +298,18 @@ materialNames =
 -- MAPPING
 
 
-{-| Transform the decoder. May be useful in case need to post process the mesh data.
+{-| Transform the decoder. For example, if you need to decode triangles’ vertices:
+
+    vertices : Decoder (List (Point3d Meters ObjCoordinates))
+    vertices =
+        map
+            (\triangularMesh ->
+                triangularMesh
+                    |> TriangularMesh.vertices
+                    |> Array.toList
+            )
+            triangles
+
 -}
 map : (a -> b) -> Decoder a -> Decoder b
 map fn (Decoder decoder) =
@@ -367,7 +385,7 @@ map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decode
 -- ADVANCED DECODING
 
 
-{-| Filter what should be decoded. For example, to implement the `group` decoder:
+{-| Filter what should be decoded. For example, to implement the [`group`](#group) decoder from above:
 
     group name =
         filter
@@ -430,7 +448,7 @@ oneOfHelp vertexData filters elements decoders errors =
                     oneOfHelp vertexData filters elements remainingDecoders (error :: errors)
 
 
-{-| A decoder that always succeeds with the result. May be useful in combination with `oneOf` to
+{-| A decoder that always succeeds with the result. May be useful in combination with [`oneOf`](#oneOf) to
 provide a placeholder mesh if decoding fails.
 -}
 succeed : a -> Decoder a
@@ -446,7 +464,8 @@ fail error =
     Decoder (\_ _ _ -> Result.Err error)
 
 
-{-| Run one decoder and then run another decoder. Useful when you first want to look at metadata, and then filter based on that.
+{-| Run one decoder and then run another decoder. Useful when you first want to look at metadata,
+and then filter based on that.
 -}
 andThen : (a -> Decoder b) -> Decoder a -> Decoder b
 andThen fn (Decoder decoderA) =
