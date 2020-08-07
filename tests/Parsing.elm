@@ -83,7 +83,7 @@ parsing =
             \_ ->
                 objFile { defaults | faceIndices = "" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
-                    |> Expect.equal (Err "Line 14: Face has no vertices")
+                    |> Expect.equal (Err "Line 14: Face has less than three vertices")
         , Test.test "fails for a face with less than three vertices" <|
             \_ ->
                 objFile { defaults | faceIndices = "1/1/1 2/2/2" }
@@ -98,7 +98,7 @@ parsing =
             \_ ->
                 objFile { defaults | lineIndices = "" }
                     |> Decode.decodeString Length.centimeters (Decode.succeed "success")
-                    |> Expect.equal (Err "Line 15: Line has no vertices")
+                    |> Expect.equal (Err "Line 15: Line has less than two vertices")
         , Test.test "fails for a line with less than two points" <|
             \_ ->
                 objFile { defaults | lineIndices = "1" }
