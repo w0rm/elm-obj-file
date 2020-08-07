@@ -438,13 +438,6 @@ oneOf decoders =
 oneOfHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List String -> Result String a
 oneOfHelp vertexData filters elements decoders errors =
     case decoders of
-        [] ->
-            if errors == [] then
-                Err "Empty oneOf decoder"
-
-            else
-                Err ("Failed oneOf decoder: " ++ String.join ", " (List.reverse errors) ++ ".")
-
         (Decoder decoder) :: remainingDecoders ->
             case decoder vertexData filters elements of
                 Ok res ->
@@ -452,6 +445,13 @@ oneOfHelp vertexData filters elements decoders errors =
 
                 Err error ->
                     oneOfHelp vertexData filters elements remainingDecoders (error :: errors)
+
+        [] ->
+            if errors == [] then
+                Err "Empty oneOf decoder"
+
+            else
+                Err ("Failed oneOf decoder: " ++ String.join ", " (List.reverse errors) ++ ".")
 
 
 {-| A decoder that always succeeds with the result. May be useful in combination with [`oneOf`](#oneOf) to
@@ -901,27 +901,28 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
                         faceIndices
 
                 Nothing ->
-                    case
-                        Maybe.map2
-                            (\position normal ->
-                                { position = Point3d.placeIn frame position
-                                , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
-                                }
-                            )
-                            (Array.get p vertexData.positions)
-                            (Array.get n vertexData.normals)
-                    of
-                        Just vertex ->
-                            addFaces vertexData
-                                frame
-                                lineno
-                                remainingVertices
-                                elements
-                                (maxIndex + 1)
-                                (Array.set p (n :: maxIndex + 1 :: lookupArray) indexMap)
-                                (vertex :: vertices)
-                                (maxIndex + 1 :: indices)
-                                faceIndices
+                    -- pattern match for performance
+                    case Array.get p vertexData.positions of
+                        Just position ->
+                            case Array.get n vertexData.normals of
+                                Just normal ->
+                                    addFaces vertexData
+                                        frame
+                                        lineno
+                                        remainingVertices
+                                        elements
+                                        (maxIndex + 1)
+                                        (Array.set p (n :: maxIndex + 1 :: lookupArray) indexMap)
+                                        ({ position = Point3d.placeIn frame position
+                                         , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                         }
+                                            :: vertices
+                                        )
+                                        (maxIndex + 1 :: indices)
+                                        faceIndices
+
+                                Nothing ->
+                                    formatError lineno "Index out of range"
 
                         Nothing ->
                             formatError lineno "Index out of range"
@@ -979,27 +980,28 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
                         faceIndices
 
                 Nothing ->
-                    case
-                        Maybe.map2
-                            (\position uvCoord ->
-                                { position = Point3d.placeIn frame position
-                                , uv = uvCoord
-                                }
-                            )
-                            (Array.get p vertexData.positions)
-                            (Array.get uv vertexData.uvs)
-                    of
-                        Just vertex ->
-                            addTexturedTriangles vertexData
-                                frame
-                                lineno
-                                remainingVertices
-                                elements
-                                (maxIndex + 1)
-                                (Array.set p (uv :: maxIndex + 1 :: lookupArray) indexMap)
-                                (vertex :: vertices)
-                                (maxIndex + 1 :: indices)
-                                faceIndices
+                    -- pattern match for performance
+                    case Array.get p vertexData.positions of
+                        Just position ->
+                            case Array.get uv vertexData.uvs of
+                                Just uvCoord ->
+                                    addTexturedTriangles vertexData
+                                        frame
+                                        lineno
+                                        remainingVertices
+                                        elements
+                                        (maxIndex + 1)
+                                        (Array.set p (uv :: maxIndex + 1 :: lookupArray) indexMap)
+                                        ({ position = Point3d.placeIn frame position
+                                         , uv = uvCoord
+                                         }
+                                            :: vertices
+                                        )
+                                        (maxIndex + 1 :: indices)
+                                        faceIndices
+
+                                Nothing ->
+                                    formatError lineno "Index out of range"
 
                         Nothing ->
                             formatError lineno "Index out of range"
@@ -1057,29 +1059,34 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
                         faceIndices
 
                 Nothing ->
-                    case
-                        Maybe.map3
-                            (\position normal uvCoord ->
-                                { position = Point3d.placeIn frame position
-                                , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
-                                , uv = uvCoord
-                                }
-                            )
-                            (Array.get p vertexData.positions)
-                            (Array.get n vertexData.normals)
-                            (Array.get uv vertexData.uvs)
-                    of
-                        Just vertex ->
-                            addTexturedFaces vertexData
-                                frame
-                                lineno
-                                remainingVertices
-                                elements
-                                (maxIndex + 1)
-                                (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
-                                (vertex :: vertices)
-                                (maxIndex + 1 :: indices)
-                                faceIndices
+                    -- pattern match for performance
+                    case Array.get p vertexData.positions of
+                        Just position ->
+                            case Array.get n vertexData.normals of
+                                Just normal ->
+                                    case Array.get uv vertexData.uvs of
+                                        Just uvCoord ->
+                                            addTexturedFaces vertexData
+                                                frame
+                                                lineno
+                                                remainingVertices
+                                                elements
+                                                (maxIndex + 1)
+                                                (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
+                                                ({ position = Point3d.placeIn frame position
+                                                 , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                                 , uv = uvCoord
+                                                 }
+                                                    :: vertices
+                                                )
+                                                (maxIndex + 1 :: indices)
+                                                faceIndices
+
+                                        Nothing ->
+                                            formatError lineno "Index out of range"
+
+                                Nothing ->
+                                    formatError lineno "Index out of range"
 
                         Nothing ->
                             formatError lineno "Index out of range"
@@ -1521,9 +1528,13 @@ parseVertices list vertices =
                     parseVertices more
                         (Vertex (p - 1) (Just (uv - 1)) Nothing :: vertices)
 
-                [ Just p, uv, Just n ] ->
+                [ Just p, Just uv, Just n ] ->
                     parseVertices more
-                        (Vertex (p - 1) (Maybe.map (\x -> x - 1) uv) (Just (n - 1)) :: vertices)
+                        (Vertex (p - 1) (Just (uv - 1)) (Just (n - 1)) :: vertices)
+
+                [ Just p, Nothing, Just n ] ->
+                    parseVertices more
+                        (Vertex (p - 1) Nothing (Just (n - 1)) :: vertices)
 
                 _ ->
                     Nothing

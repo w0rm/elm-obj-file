@@ -1,692 +1,1538 @@
-module Decode exposing (main)
+module Decode exposing
+    ( Decoder
+    , triangles, faces, texturedTriangles, texturedFaces, polylines, points
+    , decodeString, expectObj
+    , object, group, defaultGroup, material
+    , objectNames, groupNames, materialNames
+    , map, map2, map3, map4, map5
+    , filter, oneOf, fail, succeed, andThen, combine
+    , ObjCoordinates
+    , trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, polylinesIn, pointsIn
+    )
 
-import Benchmark exposing (Benchmark)
-import Benchmark.Runner exposing (BenchmarkProgram, program)
-import Length
-import Obj.Decode
+{-|
+
+@docs Decoder
 
 
-main : BenchmarkProgram
-main =
-    program <|
-        Benchmark.compare "decode"
-            "triangles"
-            (\_ -> Obj.Decode.decodeString Length.meters Obj.Decode.triangles obj |> Result.map (always ()))
-            "texturedFaces"
-            (\_ -> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces obj |> Result.map (always ()))
+# Primitives
+
+elm-obj-file supports triangular meshes that may have normal vectors and/or texture coordinates, polylines and points.
+
+By default, the geometrical data is returned in the `ObjCoordinates` [coordinate system](https://github.com/ianmackenzie/elm-geometry#coordinate-systems).
+It's also possible to [transform coordinates](#coordinate-conversion) if desired.
+
+Note that all primitive decoders require at least one element and will fail if no elements are found.
+
+@docs triangles, faces, texturedTriangles, texturedFaces, polylines, points
 
 
-obj : String
-obj =
-    """# Blender v2.90 (sub 0) OBJ File: 'pod.blend'
-# www.blender.org
-mtllib swivel.mtl
-o swivel_Cube
-v -0.126193 0.126193 -0.126193
-v -0.126193 0.126193 0.126193
-v -0.126193 -0.126193 -0.126193
-v -0.126193 -0.126193 0.126193
-v -0.126193 -0.083240 0.371962
-v -0.126193 0.083240 0.371962
-v -0.072635 -0.099014 0.622851
-v -0.095658 0.173416 0.604848
-v -0.450367 -0.036624 0.608745
-v -0.450367 0.083251 0.608745
-v -0.099626 0.169929 0.551847
-v -0.100987 -0.167685 0.551676
-v -0.431990 0.083209 0.538414
-v -0.431990 -0.083240 0.538414
-v -0.127480 -0.084779 0.486781
-v -0.414873 -0.083240 0.487081
-v -0.127532 0.084811 0.486723
-v -0.414873 0.083240 0.487081
-v -0.175413 0.083240 0.371962
-v -0.117468 0.039116 0.622763
-v -0.117485 -0.037224 0.622764
-v -0.175413 -0.083240 0.371962
-v -0.175521 -0.084431 0.537027
-v -0.177127 0.085744 0.537040
-v -0.173570 -0.080307 0.488848
-v -0.173506 0.080296 0.488910
-v -0.133616 -0.142871 0.604835
-v -0.178537 0.084174 0.604768
-v -0.072577 0.100842 0.622667
-v -0.194789 -0.037439 0.604883
-v -0.072605 -0.099013 0.576465
-v -0.072605 0.100853 0.576465
-v -0.117478 0.039091 0.576465
-v -0.117478 -0.037251 0.576465
-v -0.309591 -0.083362 0.538497
-v -0.309593 0.083226 0.538414
-v -0.309593 -0.083240 0.487081
-v -0.309593 0.083240 0.487081
-v -0.312497 0.083791 0.608768
-v -0.312499 -0.036504 0.608665
-v -0.417499 -0.124548 0.984481
-v -0.417515 0.082219 0.984493
-v -0.389121 -0.124548 0.984924
-v -0.471796 -0.037171 0.697587
-v -0.489879 -0.125019 0.787013
-v -0.489973 0.082211 0.787488
-v -0.471754 0.082224 0.697111
-v -0.386174 0.082734 0.789073
-v -0.369237 0.082709 0.713454
-v -0.386162 -0.124093 0.789559
-v -0.369197 -0.038121 0.712988
-v -0.491039 -0.124553 0.860510
-v -0.490986 0.082214 0.860510
-v -0.387186 0.082738 0.862095
-v -0.387239 -0.124553 0.862104
-v -0.389147 0.082742 0.984914
-v -0.490905 0.154364 0.787464
-v -0.491548 -0.124552 0.893756
-v -0.387106 0.154888 0.789049
-v -0.418552 0.224260 0.984463
-v -0.390157 0.224723 0.984865
-v -0.492165 0.294940 0.860484
-v -0.388365 0.295463 0.862069
-v -0.387722 0.082739 0.895341
-v -0.387749 -0.124552 0.895350
-v -0.491532 0.082215 0.893743
-v -0.492636 0.294918 0.893725
-v -0.388849 0.295488 0.895333
-v 0.126193 0.126193 -0.126193
-v 0.126193 0.126193 0.126193
-v 0.126193 -0.126193 -0.126193
-v 0.126193 -0.126193 0.126193
-v 0.126193 -0.083240 0.371962
-v 0.126193 0.083240 0.371962
-v 0.072635 -0.099014 0.622851
-v 0.095658 0.173416 0.604848
-v 0.450367 -0.036624 0.608745
-v 0.450367 0.083251 0.608745
-v 0.000000 -0.126193 -0.126193
-v 0.000000 -0.126193 0.126193
-v 0.000000 0.126193 -0.126193
-v 0.000000 0.126193 0.126193
-v 0.000000 -0.083240 0.371962
-v 0.000000 0.083240 0.371962
-v 0.000000 -0.194564 0.604526
-v -0.000000 0.198825 0.604963
-v 0.099626 0.169929 0.551847
-v 0.100987 -0.167685 0.551676
-v 0.431990 0.083209 0.538414
-v 0.431990 -0.083240 0.538414
-v 0.000000 -0.200860 0.553661
-v -0.000000 0.202025 0.553459
-v 0.127480 -0.084779 0.486781
-v 0.414873 -0.083240 0.487081
-v 0.127532 0.084811 0.486723
-v 0.414873 0.083240 0.487081
-v 0.000000 -0.084560 0.485030
-v 0.000000 0.084512 0.485052
-v 0.175413 0.083240 0.371962
-v 0.117468 0.039116 0.622763
-v 0.117485 -0.037224 0.622764
-v 0.175413 -0.083240 0.371962
-v 0.175521 -0.084431 0.537027
-v 0.177127 0.085744 0.537040
-v 0.173570 -0.080307 0.488848
-v 0.173506 0.080296 0.488910
-v 0.133616 -0.142871 0.604835
-v 0.000000 -0.122648 0.622936
-v 0.178537 0.084174 0.604768
-v 0.072577 0.100842 0.622667
-v 0.194789 -0.037439 0.604883
-v -0.000000 0.124407 0.622607
-v 0.072605 -0.099013 0.576465
-v 0.072605 0.100853 0.576465
-v 0.000000 -0.122604 0.576465
-v 0.000000 0.124444 0.576465
-v 0.117478 0.039091 0.576465
-v 0.117478 -0.037251 0.576465
-v 0.309591 -0.083362 0.538497
-v 0.309593 0.083226 0.538414
-v 0.309593 -0.083240 0.487081
-v 0.309593 0.083240 0.487081
-v 0.312497 0.083791 0.608768
-v 0.312499 -0.036504 0.608665
-v 0.417499 -0.124548 0.984481
-v 0.417515 0.082219 0.984493
-v 0.389121 -0.124548 0.984924
-v 0.471796 -0.037171 0.697587
-v 0.489879 -0.125019 0.787013
-v 0.489973 0.082211 0.787488
-v 0.471754 0.082224 0.697111
-v 0.386174 0.082734 0.789073
-v 0.369237 0.082709 0.713454
-v 0.386162 -0.124093 0.789559
-v 0.369197 -0.038121 0.712988
-v 0.491039 -0.124553 0.860510
-v 0.490986 0.082214 0.860510
-v 0.387186 0.082738 0.862095
-v 0.387239 -0.124553 0.862104
-v 0.389147 0.082742 0.984914
-v 0.490905 0.154364 0.787464
-v 0.491548 -0.124552 0.893756
-v 0.387106 0.154888 0.789049
-v 0.418552 0.224260 0.984463
-v 0.390157 0.224723 0.984865
-v 0.492165 0.294940 0.860484
-v 0.388365 0.295463 0.862069
-v 0.387722 0.082739 0.895341
-v 0.387749 -0.124552 0.895350
-v 0.491532 0.082215 0.893743
-v 0.492636 0.294918 0.893725
-v 0.388849 0.295488 0.895333
-vt 0.106151 0.902035
-vt 0.128224 0.902035
-vt 0.128224 0.913071
-vt 0.106151 0.913071
-vt 0.128224 0.935143
-vt 0.106151 0.935143
-vt 0.321678 0.922000
-vt 0.332714 0.922000
-vt 0.332714 0.944072
-vt 0.321678 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.955108
-vt 0.354786 0.955108
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.955108
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.910963
-vt 0.354786 0.910963
-vt 0.354786 0.910963
-vt 0.354786 0.910963
-vt 0.128224 0.946180
-vt 0.106151 0.946180
-vt 0.354786 0.922000
-vt 0.354786 0.910963
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.955108
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.365822 0.922000
-vt 0.365822 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.365822 0.944072
-vt 0.365822 0.944072
-vt 0.120411 0.908607
-vt 0.131447 0.908607
-vt 0.131447 0.930679
-vt 0.120411 0.930679
-vt 0.120411 0.930679
-vt 0.120411 0.908607
-vt 0.365822 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.365822 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.106151 0.913071
-vt 0.128224 0.913071
-vt 0.106151 0.935143
-vt 0.128224 0.935143
-vt 0.332714 0.944072
-vt 0.332714 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.955108
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.120411 0.908607
-vt 0.120411 0.930679
-vt 0.120411 0.908607
-vt 0.120411 0.930679
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.922000
-vt 0.354786 0.922000
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vt 0.354786 0.944072
-vn 0.0000 -1.0000 0.0000
-vn -1.0000 0.0000 0.0000
-vn 0.0000 0.0000 -1.0000
-vn 0.0000 0.9851 0.1722
-vn -0.2564 0.9655 -0.0443
-vn -0.9675 0.0000 -0.2528
-vn -0.7748 0.0000 0.6322
-vn -0.0000 -0.8326 0.5539
-vn -0.3120 -0.9429 0.1167
-vn 0.0000 -0.9851 0.1722
-vn 0.0000 1.0000 0.0000
-vn -0.0110 -0.5082 -0.8612
-vn -0.0005 -1.0000 -0.0013
-vn -0.9486 0.0000 -0.3163
-vn -0.0090 0.6095 -0.7928
-vn -0.0021 1.0000 -0.0046
-vn 0.0011 0.9999 -0.0125
-vn 0.0213 0.9995 0.0248
-vn 0.0212 -0.9995 0.0247
-vn 0.0008 -0.9999 -0.0125
-vn -0.0001 1.0000 0.0004
-vn -0.0982 0.6248 -0.7746
-vn -0.0954 -0.9951 0.0265
-vn -0.7344 0.6787 0.0048
-vn -0.5746 -0.6104 -0.5452
-vn -0.8293 -0.4810 -0.2845
-vn 0.8092 0.5876 0.0002
-vn 0.0000 0.9997 0.0252
-vn -0.0919 -0.2545 0.9627
-vn -0.1888 0.1599 0.9689
-vn -0.2093 -0.1325 0.9688
-vn -0.0656 0.2243 0.9723
-vn 0.0216 0.9998 0.0003
-vn -0.2446 0.0207 0.9694
-vn 0.0000 0.0000 1.0000
-vn 0.3092 0.9510 0.0006
-vn 1.0000 -0.0001 -0.0000
-vn 0.3089 -0.9511 -0.0006
-vn 0.8089 -0.5880 -0.0002
-vn -0.0107 0.9999 0.0069
-vn -0.0089 -0.9963 -0.0856
-vn -0.6511 0.0000 -0.7590
-vn 0.0052 -0.8265 0.5628
-vn 0.0309 -0.0020 0.9995
-vn -0.0152 -0.0000 0.9999
-vn 0.9999 0.0000 0.0156
-vn -0.0027 -0.9999 -0.0123
-vn 0.0242 -0.6676 -0.7442
-vn 0.8789 -0.0010 0.4770
-vn 0.9761 0.0002 0.2175
-vn -0.0049 0.9999 0.0089
-vn -0.0048 1.0000 -0.0011
-vn -0.9720 -0.0003 -0.2349
-vn -0.9802 -0.0002 -0.1980
-vn 0.0045 -1.0000 0.0001
-vn 0.9999 -0.0001 0.0144
-vn -0.9999 -0.0001 -0.0148
-vn 0.0153 -0.0000 -0.9999
-vn 0.0112 0.4610 -0.8873
-vn -0.0156 0.7836 0.6210
-vn -0.7756 -0.0046 0.6312
-vn 0.9999 0.0054 0.0153
-vn 0.9999 0.0074 0.0084
-vn -0.0145 0.0002 0.9999
-vn -0.9999 -0.0074 -0.0084
-vn 0.0153 -0.0001 -0.9999
-vn 0.9998 0.0060 0.0176
-vn -0.9999 -0.0054 -0.0153
-vn -0.0053 1.0000 -0.0001
-vn 0.9999 -0.0002 0.0157
-vn -0.9999 0.0002 -0.0159
-vn 1.0000 0.0000 0.0000
-vn 0.2564 0.9655 -0.0443
-vn 0.9675 0.0000 -0.2528
-vn 0.7748 0.0000 0.6322
-vn 0.3524 -0.9121 0.2095
-vn 0.1965 -0.6425 -0.7406
-vn 0.0005 -1.0000 -0.0013
-vn 0.9486 0.0000 -0.3163
-vn 0.1926 0.6353 -0.7479
-vn 0.0021 1.0000 -0.0046
-vn -0.0011 0.9999 -0.0125
-vn -0.0213 0.9995 0.0248
-vn -0.0212 -0.9995 0.0247
-vn -0.0008 -0.9999 -0.0125
-vn 0.0001 1.0000 0.0004
-vn 0.7177 0.6838 -0.1314
-vn 0.0000 -0.9997 0.0251
-vn 0.7344 0.6787 0.0048
-vn 0.1001 -0.9910 -0.0889
-vn 0.8605 -0.4993 0.1014
-vn -0.8092 0.5876 0.0002
-vn 0.0964 0.9950 0.0266
-vn 0.0919 -0.2545 0.9627
-vn 0.1888 0.1599 0.9689
-vn 0.2093 -0.1325 0.9688
-vn 0.0656 0.2243 0.9723
-vn -0.0216 0.9998 0.0003
-vn 0.2446 0.0207 0.9694
-vn -0.3092 0.9510 0.0006
-vn -1.0000 -0.0001 -0.0000
-vn -0.3089 -0.9511 -0.0006
-vn -0.8089 -0.5880 -0.0002
-vn 0.0107 0.9999 0.0069
-vn -0.0216 -0.9998 -0.0024
-vn 0.6511 0.0000 -0.7590
-vn -0.0052 -0.8265 0.5628
-vn -0.0309 -0.0020 0.9995
-vn 0.0152 -0.0000 0.9999
-vn -0.9999 0.0000 0.0156
-vn 0.0027 -0.9999 -0.0123
-vn -0.0235 -0.7156 -0.6982
-vn -0.8789 -0.0010 0.4770
-vn -0.9761 0.0002 0.2175
-vn 0.0049 0.9999 0.0089
-vn 0.0048 1.0000 -0.0011
-vn 0.9720 -0.0003 -0.2349
-vn 0.9802 -0.0002 -0.1980
-vn -0.0045 -1.0000 0.0001
-vn -0.9999 -0.0001 0.0144
-vn 0.9999 -0.0001 -0.0148
-vn 0.0153 0.0000 0.9999
-vn -0.0112 0.4610 -0.8873
-vn 0.0156 0.7836 0.6210
-vn 0.7756 -0.0046 0.6312
-vn -0.9999 0.0054 0.0153
-vn -0.9999 0.0074 0.0084
-vn 0.0145 0.0002 0.9999
-vn 0.9999 -0.0074 -0.0084
-vn -0.0153 -0.0001 -0.9999
-vn -0.9998 0.0060 0.0176
-vn 0.9999 -0.0054 -0.0153
-vn 0.0053 1.0000 -0.0001
-vn -0.9999 -0.0002 0.0157
-vn 0.9999 0.0002 -0.0159
-vn -0.1037 -0.6728 -0.7325
-vn 0.0089 -0.9963 -0.0856
-vn 0.0201 0.9933 -0.1139
-vn 0.0000 0.9999 -0.0137
-vn 0.7269 -0.6740 -0.1316
-vn 0.5746 -0.6104 -0.5452
-vn 0.0972 -0.9952 -0.0144
-vn 0.0982 0.6248 -0.7746
-vn 0.0101 0.5031 -0.8642
-vn 0.0110 -0.5082 -0.8612
-vn 0.3120 -0.9429 0.1167
-vn 0.3070 0.9499 0.0590
-vn 0.0965 -0.7197 -0.6875
-vn 0.0216 -0.9998 -0.0024
-vn -0.0201 0.9933 -0.1139
-vn -0.0984 0.9950 -0.0148
-vn -0.7454 -0.6281 0.2233
-vn -0.1001 -0.9910 -0.0889
-vn 0.0000 -0.9999 -0.0134
-vn -0.7177 0.6838 -0.1314
-vn -0.1465 0.4977 -0.8549
-vn -0.1965 -0.6425 -0.7406
-vn -0.3524 -0.9121 0.2095
-vn -0.3070 0.9499 0.0590
-usemtl generic
-s off
-f 79/1/1 80/2/1 4/3/1 3/4/1
-f 3/4/2 4/3/2 2/5/2 1/6/2
-f 79/7/3 3/8/3 1/9/3 81/10/3
-f 2/11/2 4/12/2 5/13/2 6/14/2
-f 82/15/4 2/11/4 6/14/4 84/16/4
-f 11/17/5 8/18/5 86/19/5
-f 13/20/6 14/21/6 9/22/6 10/23/6
-f 66/24/7 58/25/7 41/26/7 42/27/7
-f 35/28/8 40/29/8 9/22/8 14/21/8
-f 12/30/9 91/31/9 85/32/9
-f 4/12/10 80/33/10 83/34/10 5/13/10
-f 1/6/11 2/5/11 82/35/11 81/36/11
-f 15/37/12 97/38/12 91/31/12
-f 37/39/13 35/28/13 14/21/13 16/40/13
-f 18/41/14 16/40/14 14/21/14 13/20/14
-f 98/42/15 17/43/15 11/17/15
-f 39/44/16 36/45/16 13/20/16 10/23/16
-f 84/16/17 6/14/17 17/43/17 98/42/17
-f 26/46/18 19/47/18 38/48/18
-f 22/49/19 25/50/19 37/39/19
-f 5/13/20 83/34/20 97/38/20 15/37/20
-f 36/45/21 38/48/21 18/41/21 13/20/21
-f 11/17/22 17/43/22 26/46/22
-f 15/37/23 25/50/23 22/49/23
-f 8/18/24 11/17/24 24/51/24 28/52/24
-f 15/37/25 12/30/25 23/53/25
-f 6/14/3 5/13/3 22/49/3 19/47/3
-f 12/30/26 27/54/26 30/55/26
-f 21/56/27 7/57/27 31/58/27 34/59/27
-f 6/14/28 19/47/28 26/46/28
-f 108/60/29 7/57/29 27/54/29 85/61/29
-f 20/62/30 29/63/30 8/18/30 28/52/30
-f 7/57/31 21/56/31 30/55/31 27/54/31
-f 29/63/32 112/64/32 86/65/32 8/18/32
-f 26/46/33 38/48/33 36/45/33
-f 21/56/34 20/62/34 28/52/34 30/55/34
-f 31/66/35 115/67/35 116/68/35 32/69/35
-f 31/66/35 32/69/35 33/70/35 34/71/35
-f 7/57/36 108/60/36 115/72/36 31/58/36
-f 20/62/37 21/56/37 34/59/37 33/73/37
-f 112/64/38 29/63/38 32/74/38 116/75/38
-f 29/63/39 20/62/39 33/73/39 32/74/39
-f 28/52/40 24/51/40 36/45/40 39/44/40
-f 25/50/41 23/53/41 35/28/41
-f 19/47/42 22/49/42 37/39/42 38/48/42
-f 23/53/43 30/55/43 40/29/43 35/28/43
-f 30/55/44 28/52/44 39/44/44 40/29/44
-f 18/41/3 38/48/3 37/39/3 16/40/3
-f 43/76/45 56/77/45 42/27/45 41/26/45
-f 65/78/46 64/79/46 56/77/46 43/76/46
-f 58/25/1 65/78/1 43/76/1 41/26/1
-f 9/22/47 40/29/47 51/80/47 44/81/47
-f 51/80/48 50/82/48 45/83/48
-f 40/29/49 39/44/49 49/84/49 51/80/49
-f 51/80/50 49/84/50 48/85/50 50/82/50
-f 39/44/51 10/23/51 47/86/51 49/84/51
-f 49/84/52 47/86/52 46/87/52 48/85/52
-f 10/23/53 9/22/53 44/81/53 47/86/53
-f 47/86/54 44/81/54 45/83/54 46/87/54
-f 45/83/55 50/82/55 55/88/55 52/89/55
-f 50/82/56 48/85/56 54/90/56 55/88/56
-f 46/87/57 45/83/57 52/89/57 53/91/57
-f 53/91/58 62/92/58 63/93/58 54/90/58
-f 59/94/59 57/95/59 62/92/59 63/93/59
-f 68/96/60 67/97/60 60/98/60 61/99/60
-f 66/24/61 42/27/61 60/98/61 67/97/61
-f 64/79/62 54/90/62 63/93/62 68/96/62
-f 54/90/63 48/85/63 59/94/63 63/93/63
-f 42/27/64 56/77/64 61/99/64 60/98/64
-f 46/87/65 53/91/65 62/92/65 57/95/65
-f 48/85/66 46/87/66 57/95/66 59/94/66
-f 56/77/67 64/79/67 68/96/67 61/99/67
-f 53/91/68 66/24/68 67/97/68 62/92/68
-f 63/93/69 62/92/69 67/97/69 68/96/69
-f 52/89/1 55/88/1 65/78/1 58/25/1
-f 55/88/70 54/90/70 64/79/70 65/78/70
-f 53/91/71 52/89/71 58/25/71 66/24/71
-f 79/1/1 71/100/1 72/101/1 80/2/1
-f 71/100/72 69/102/72 70/103/72 72/101/72
-f 79/7/3 81/10/3 69/104/3 71/105/3
-f 70/106/72 74/107/72 73/108/72 72/109/72
-f 82/15/4 84/16/4 74/107/4 70/106/4
-f 86/19/73 76/110/73 87/111/73
-f 89/112/74 78/113/74 77/114/74 90/115/74
-f 150/116/75 126/117/75 125/118/75 142/119/75
-f 119/120/8 90/115/8 77/114/8 124/121/8
-f 88/122/76 107/123/76 85/32/76
-f 72/109/10 73/108/10 83/34/10 80/33/10
-f 69/102/11 81/36/11 82/35/11 70/103/11
-f 93/124/77 88/122/77 91/31/77
-f 121/125/78 94/126/78 90/115/78 119/120/78
-f 96/127/79 89/112/79 90/115/79 94/126/79
-f 92/128/80 87/111/80 95/129/80
-f 123/130/81 78/113/81 89/112/81 120/131/81
-f 84/16/82 98/42/82 95/129/82 74/107/82
-f 106/132/83 122/133/83 99/134/83
-f 102/135/84 121/125/84 105/136/84
-f 73/108/85 93/124/85 97/38/85 83/34/85
-f 120/131/86 89/112/86 96/127/86 122/133/86
-f 87/111/87 104/137/87 106/132/87
-f 73/108/88 102/135/88 105/136/88
-f 76/110/89 109/138/89 104/137/89 87/111/89
-f 93/124/90 105/136/90 103/139/90
-f 74/107/3 99/134/3 102/135/3 73/108/3
-f 103/139/91 111/140/91 107/123/91
-f 101/141/92 118/142/92 113/143/92 75/144/92
-f 95/129/93 106/132/93 99/134/93
-f 108/60/94 85/61/94 107/123/94 75/144/94
-f 100/145/95 109/138/95 76/110/95 110/146/95
-f 75/144/96 107/123/96 111/140/96 101/141/96
-f 110/146/97 76/110/97 86/65/97 112/64/97
-f 120/131/98 122/133/98 106/132/98
-f 101/141/99 111/140/99 109/138/99 100/145/99
-f 113/147/35 114/148/35 116/68/35 115/67/35
-f 113/147/35 118/149/35 117/150/35 114/148/35
-f 75/144/100 113/143/100 115/72/100 108/60/100
-f 100/145/101 117/151/101 118/142/101 101/141/101
-f 112/64/102 116/75/102 114/152/102 110/146/102
-f 110/146/103 114/152/103 117/151/103 100/145/103
-f 109/138/104 123/130/104 120/131/104 104/137/104
-f 105/136/105 121/125/105 119/120/105
-f 99/134/106 122/133/106 121/125/106 102/135/106
-f 103/139/107 119/120/107 124/121/107 111/140/107
-f 111/140/108 124/121/108 123/130/108 109/138/108
-f 96/127/3 94/126/3 121/125/3 122/133/3
-f 127/153/109 125/118/109 126/117/109 140/154/109
-f 149/155/110 127/153/110 140/154/110 148/156/110
-f 142/119/1 125/118/1 127/153/1 149/155/1
-f 77/114/111 128/157/111 135/158/111 124/121/111
-f 128/157/112 129/159/112 134/160/112
-f 124/121/113 135/158/113 133/161/113 123/130/113
-f 135/158/114 134/160/114 132/162/114 133/161/114
-f 123/130/115 133/161/115 131/163/115 78/113/115
-f 133/161/116 132/162/116 130/164/116 131/163/116
-f 78/113/117 131/163/117 128/157/117 77/114/117
-f 131/163/118 130/164/118 129/159/118 128/157/118
-f 129/159/119 136/165/119 139/166/119 134/160/119
-f 134/160/120 139/166/120 138/167/120 132/162/120
-f 130/164/121 137/168/121 136/165/121 129/159/121
-f 137/168/122 146/169/122 147/170/122 138/167/122
-f 143/171/123 147/170/123 146/169/123 141/172/123
-f 152/173/124 145/174/124 144/175/124 151/176/124
-f 150/116/125 151/176/125 144/175/125 126/117/125
-f 148/156/126 152/173/126 147/170/126 138/167/126
-f 138/167/127 147/170/127 143/171/127 132/162/127
-f 126/117/128 144/175/128 145/174/128 140/154/128
-f 130/164/129 141/172/129 146/169/129 137/168/129
-f 132/162/130 143/171/130 141/172/130 130/164/130
-f 140/154/131 145/174/131 152/173/131 148/156/131
-f 137/168/132 146/169/132 151/176/132 150/116/132
-f 147/170/133 152/173/133 151/176/133 146/169/133
-f 136/165/1 142/119/1 149/155/1 139/166/1
-f 139/166/134 149/155/134 148/156/134 138/167/134
-f 137/168/135 150/116/135 142/119/135 136/165/135
-f 135/158/136 128/157/136 134/160/136
-f 103/139/137 105/136/137 119/120/137
-f 104/137/138 120/131/138 106/132/138
-f 74/107/139 95/129/139 99/134/139
-f 88/122/140 103/139/140 107/123/140
-f 88/122/141 93/124/141 103/139/141
-f 93/124/142 73/108/142 105/136/142
-f 95/129/143 87/111/143 106/132/143
-f 98/42/144 92/128/144 95/129/144
-f 97/38/145 93/124/145 91/31/145
-f 91/31/146 88/122/146 85/32/146
-f 92/128/147 86/19/147 87/111/147
-f 44/81/148 51/80/148 45/83/148
-f 37/39/149 25/50/149 35/28/149
-f 24/51/150 26/46/150 36/45/150
-f 17/43/151 6/14/151 26/46/151
-f 23/53/152 12/30/152 30/55/152
-f 25/50/153 15/37/153 23/53/153
-f 5/13/154 15/37/154 22/49/154
-f 24/51/155 11/17/155 26/46/155
-f 92/128/156 98/42/156 11/17/156
-f 12/30/157 15/37/157 91/31/157
-f 27/54/158 12/30/158 85/32/158
-f 92/128/159 11/17/159 86/19/159
-"""
+# Run Decoders
+
+@docs decodeString, expectObj
+
+
+# Filtering
+
+Primitives within OBJ files can be tagged with metadata such as object name, group names and materials.
+
+Using the filtering decoders, you can selectively decode based on this metadata.
+
+For advanced filtering rules check the [`filter`](#filter) decoder.
+
+@docs object, group, defaultGroup, material
+
+
+# Metadata
+
+Decode useful information other than primitives. This can be useful to inspect the contents of the file.
+
+Metadata decoders can be also composed with advanced decoders [`andThen`](#andThen) and
+[`combine`](#combine) to first get the metadata, and then filter the primitives.
+
+@docs objectNames, groupNames, materialNames
+
+
+# Mapping
+
+@docs map, map2, map3, map4, map5
+
+
+# Advanced Decoding
+
+@docs filter, oneOf, fail, succeed, andThen, combine
+
+
+# Coordinate Conversion
+
+@docs ObjCoordinates
+
+@docs trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, polylinesIn, pointsIn
+
+-}
+
+import Array exposing (Array)
+import Direction3d exposing (Direction3d)
+import Frame3d exposing (Frame3d)
+import Http
+import Length exposing (Length, Meters)
+import Point3d exposing (Point3d)
+import Polyline3d exposing (Polyline3d)
+import Quantity exposing (Unitless)
+import Set
+import TriangularMesh exposing (TriangularMesh)
+import Vector3d exposing (Vector3d)
+
+
+{-| A value that knows how to decode information from
+[the OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
+-}
+type Decoder a
+    = Decoder (VertexData -> List String -> List Group -> Result String a)
+
+
+{-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFacets` from elm-3d-scene.
+-}
+triangles : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
+triangles =
+    trianglesIn Frame3d.atOrigin
+
+
+{-| Decode positions and normal vectors. Use with `Scene3d.Mesh.indexedFaces`.
+-}
+faces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates })
+faces =
+    facesIn Frame3d.atOrigin
+
+
+{-| Decode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
+Use with `Scene3d.Mesh.texturedTriangles` or `Scene3d.Mesh.texturedFacets`.
+-}
+texturedTriangles : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, uv : ( Float, Float ) })
+texturedTriangles =
+    texturedTrianglesIn Frame3d.atOrigin
+
+
+{-| Decode positions, UV and normal vectors. Use with `Scene3d.Mesh.texturedFaces`.
+-}
+texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
+texturedFaces =
+    texturedFacesIn Frame3d.atOrigin
+
+
+{-| -}
+polylines : Decoder (List (Polyline3d Meters ObjCoordinates))
+polylines =
+    polylinesIn Frame3d.atOrigin
+
+
+{-| -}
+points : Decoder (List (Point3d Meters ObjCoordinates))
+points =
+    pointsIn Frame3d.atOrigin
+
+
+
+-- RUN DECODERS
+
+
+{-| Run the decoder on the string. Takes a function, that knows
+how to convert float coordinates into physical units.
+
+    decodeString Length.meters triangles string == Ok (TriangularMesh {...})
+    decodeString Length.meters triangles string == Err "Line 1: Invalid OBJ syntax '...'"
+
+-}
+decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
+decodeString units (Decoder decode) content =
+    decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] []
+
+
+{-| Load a mesh from an [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
+
+    type Msg
+        = GotMesh (Result Http.Error (TriangularMesh (Point3d Meters ObjCoordinates)))
+
+    getMesh : Cmd Msg
+    getMesh =
+        Http.get
+            { url = "Pod.obj.txt"
+            , expect =
+                expectObj GotMesh
+                    Length.meters
+                    triangles
+            }
+
+Note: the .txt extension is required to work with `elm reactor`.
+
+-}
+expectObj : (Result Http.Error a -> msg) -> (Float -> Length) -> Decoder a -> Http.Expect msg
+expectObj toMsg units decoder =
+    Http.expectStringResponse toMsg <|
+        \response ->
+            case response of
+                Http.BadUrl_ url ->
+                    Err (Http.BadUrl url)
+
+                Http.Timeout_ ->
+                    Err Http.Timeout
+
+                Http.NetworkError_ ->
+                    Err Http.NetworkError
+
+                Http.BadStatus_ metadata _ ->
+                    Err (Http.BadStatus metadata.statusCode)
+
+                Http.GoodStatus_ _ body ->
+                    case decodeString units decoder body of
+                        Ok value ->
+                            Ok value
+
+                        Err string ->
+                            Err (Http.BadBody string)
+
+
+
+-- FILTERING
+
+
+{-| Decode data for the given object name.
+
+    wheels : Decoder (TriangularMesh (Point3d Meters ObjCoordinates))
+    wheels =
+        object "wheels" triangles
+
+-}
+object : String -> Decoder a -> Decoder a
+object name =
+    filterHelp ("object '" ++ name ++ "'") (\properties -> properties.object == Just name)
+
+
+{-| Decode data for the given group name.
+-}
+group : String -> Decoder a -> Decoder a
+group name =
+    filterHelp ("group '" ++ name ++ "'") (\properties -> List.member name properties.groups)
+
+
+{-| Decode data for the default group. This group has a special meaning,
+all elements are assigned to it if a group is not specified.
+
+    defaultGroup =
+        group "default"
+
+-}
+defaultGroup : Decoder a -> Decoder a
+defaultGroup =
+    group "default"
+
+
+{-| Decode data for the given material name.
+-}
+material : String -> Decoder a -> Decoder a
+material name =
+    filterHelp ("material '" ++ name ++ "'") (\properties -> properties.material == Just name)
+
+
+
+-- METADATA
+
+
+{-| Decode a sorted list of object names.
+-}
+objectNames : Decoder (List String)
+objectNames =
+    Decoder
+        (\_ _ elements ->
+            elements
+                |> List.foldl
+                    (\(Group properties _ _ _) objectsSet ->
+                        case properties.object of
+                            Just obj ->
+                                Set.insert obj objectsSet
+
+                            Nothing ->
+                                objectsSet
+                    )
+                    Set.empty
+                |> Set.toList
+                |> Result.Ok
+        )
+
+
+{-| Decode a sorted list of group names.
+-}
+groupNames : Decoder (List String)
+groupNames =
+    Decoder
+        (\_ _ elements ->
+            elements
+                |> List.foldl
+                    (\(Group properties _ _ _) groupsSet ->
+                        List.foldl Set.insert groupsSet properties.groups
+                    )
+                    Set.empty
+                |> Set.toList
+                |> Result.Ok
+        )
+
+
+{-| Decode a sorted list of material names.
+-}
+materialNames : Decoder (List String)
+materialNames =
+    Decoder
+        (\_ _ elements ->
+            elements
+                |> List.foldl
+                    (\(Group properties _ _ _) materialsSet ->
+                        case properties.material of
+                            Just obj ->
+                                Set.insert obj materialsSet
+
+                            Nothing ->
+                                materialsSet
+                    )
+                    Set.empty
+                |> Set.toList
+                |> Result.Ok
+        )
+
+
+
+-- MAPPING
+
+
+{-| Transform the decoder. For example, if you need to decode triangles’ vertices:
+
+    vertices : Decoder (List (Point3d Meters ObjCoordinates))
+    vertices =
+        map
+            (\triangularMesh ->
+                triangularMesh
+                    |> TriangularMesh.vertices
+                    |> Array.toList
+            )
+            triangles
+
+-}
+map : (a -> b) -> Decoder a -> Decoder b
+map fn (Decoder decoder) =
+    Decoder
+        (\vertexData filters elements ->
+            Result.map fn (decoder vertexData filters elements)
+        )
+
+
+{-| Join the result from two decoders. This lets you extract parts of the same OBJ file into separate meshes.
+
+    type alias Car =
+        { wheels : TriangularMesh (Point3d Meters ObjCoordinates)
+        , base : TriangularMesh (Point3d Meters ObjCoordinates)
+        }
+
+    carDecoder : Decoder Car
+    carDecoder =
+        map2 Car
+            (object "wheels" triangles)
+            (object "base" triangles)
+
+-}
+map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
+map2 fn (Decoder decoderA) (Decoder decoderB) =
+    Decoder
+        (\vertexData filters elements ->
+            Result.map2 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+        )
+
+
+{-| -}
+map3 : (a -> b -> c -> d) -> Decoder a -> Decoder b -> Decoder c -> Decoder d
+map3 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) =
+    Decoder
+        (\vertexData filters elements ->
+            Result.map3 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+                (decoderC vertexData filters elements)
+        )
+
+
+{-| -}
+map4 : (a -> b -> c -> d -> e) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e
+map4 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decoderD) =
+    Decoder
+        (\vertexData filters elements ->
+            Result.map4 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+                (decoderC vertexData filters elements)
+                (decoderD vertexData filters elements)
+        )
+
+
+{-| -}
+map5 : (a -> b -> c -> d -> e -> f) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e -> Decoder f
+map5 fn (Decoder decoderA) (Decoder decoderB) (Decoder decoderC) (Decoder decoderD) (Decoder decoderE) =
+    Decoder
+        (\vertexData filters elements ->
+            Result.map5 fn
+                (decoderA vertexData filters elements)
+                (decoderB vertexData filters elements)
+                (decoderC vertexData filters elements)
+                (decoderD vertexData filters elements)
+                (decoderE vertexData filters elements)
+        )
+
+
+
+-- ADVANCED DECODING
+
+
+{-| Filter what should be decoded. For example, to implement the [`group`](#group) decoder from above:
+
+    group name =
+        filter
+            (\properties ->
+                List.member name properties.groups
+            )
+
+-}
+filter :
+    ({ groups : List String, object : Maybe String, material : Maybe String } -> Bool)
+    -> Decoder a
+    -> Decoder a
+filter =
+    filterHelp "<custom filter>"
+
+
+filterHelp :
+    String
+    -> ({ groups : List String, object : Maybe String, material : Maybe String } -> Bool)
+    -> Decoder a
+    -> Decoder a
+filterHelp name fn (Decoder decoder) =
+    Decoder
+        (\vertexData filters elements ->
+            decoder vertexData
+                (name :: filters)
+                (List.filter
+                    (\(Group properties _ _ _) -> fn properties)
+                    elements
+                )
+        )
+
+
+{-| Try a bunch of different decoders. You will get the result from the first one that succeeds.
+-}
+oneOf : List (Decoder a) -> Decoder a
+oneOf decoders =
+    Decoder
+        (\vertexData filters elements ->
+            oneOfHelp vertexData filters elements decoders []
+        )
+
+
+oneOfHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List String -> Result String a
+oneOfHelp vertexData filters elements decoders errors =
+    case decoders of
+        [] ->
+            if errors == [] then
+                Err "Empty oneOf decoder"
+
+            else
+                Err ("Failed oneOf decoder: " ++ String.join ", " (List.reverse errors) ++ ".")
+
+        (Decoder decoder) :: remainingDecoders ->
+            case decoder vertexData filters elements of
+                Ok res ->
+                    Ok res
+
+                Err error ->
+                    oneOfHelp vertexData filters elements remainingDecoders (error :: errors)
+
+
+{-| A decoder that always succeeds with the result. May be useful in combination with [`oneOf`](#oneOf) to
+provide a placeholder mesh if decoding fails.
+-}
+succeed : a -> Decoder a
+succeed mesh =
+    Decoder (\_ _ _ -> Result.Ok mesh)
+
+
+{-| A decoder that always fails with a given error message.
+Use it in case you need custom error messages.
+-}
+fail : String -> Decoder a
+fail error =
+    Decoder (\_ _ _ -> Result.Err error)
+
+
+{-| Run one decoder and then run another decoder. Useful when you first want to look at metadata,
+and then filter based on that.
+-}
+andThen : (a -> Decoder b) -> Decoder a -> Decoder b
+andThen fn (Decoder decoderA) =
+    Decoder
+        (\vertexData filters elements ->
+            case decoderA vertexData filters elements of
+                Ok result ->
+                    case fn result of
+                        Decoder decoderB ->
+                            decoderB vertexData [] elements
+
+                Err error ->
+                    Err error
+        )
+
+
+{-| Combine multiple decoders together. For example, to extract meshes for all materials:
+
+    type alias MeshWithMaterial =
+        ( String, TriangularMesh (Point3d Meters ObjCoordinates) )
+
+    trianglesForMaterials : String -> Decode (List MeshWithMaterial)
+    trianglesForMaterials names =
+        names
+            |> List.map
+                (\materialName ->
+                    material materialName triangles
+                        |> map (\mesh -> ( materialName, mesh ))
+                )
+            |> combine
+
+    -- Decode material names, and then decode
+    -- triangles for these materials
+    withMaterials : Decode (List MeshWithMaterial)
+    withMaterials =
+        materialNames |> andThen trianglesForMaterials
+
+-}
+combine : List (Decoder a) -> Decoder (List a)
+combine decoders =
+    Decoder
+        (\vertexData filters elements ->
+            combineHelp vertexData filters elements decoders []
+        )
+
+
+combineHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List a -> Result String (List a)
+combineHelp vertexData filters elements decoders list =
+    case decoders of
+        (Decoder decoder) :: remainingDecoders ->
+            case decoder vertexData filters elements of
+                Ok result ->
+                    combineHelp vertexData filters elements remainingDecoders (result :: list)
+
+                Err error ->
+                    Err error
+
+        [] ->
+            Ok (List.reverse list)
+
+
+{-| Coordinate system for decoded meshes.
+-}
+type ObjCoordinates
+    = ObjCoordinates
+
+
+{-| Transform coordinates when decoding. For example, if you need to render a mesh with Z-up,
+but it was exported with Y-up:
+
+    type ZUpCoords
+        = ZUpCoords
+
+    yUpToZUpFrame : Frame3d Meters ZUpCoords { defines : ObjCoordinates }
+    yUpToZUpFrame =
+        Frame3d.atOrigin
+            |> Frame3d.rotateAround
+                Axis3d.x
+                (Angle.degrees 90)
+
+    zUpTriangles : Decoder (TriangularMesh (Point3d Meters ZUpCoords))
+    zUpTriangles =
+        trianglesIn yUpToZUpFrame
+
+-}
+trianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh (Point3d Meters coordinates))
+trianglesIn frame =
+    Decoder
+        (\vertexData filters groups ->
+            triangularMesh
+                (addTriangles vertexData frame)
+                filters
+                groups
+                (indexState vertexData.indexMap)
+                []
+        )
+
+
+{-| -}
+facesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates })
+facesIn frame =
+    Decoder
+        (\vertexData filters groups ->
+            triangularMesh
+                (addFaces vertexData frame)
+                filters
+                groups
+                (indexState vertexData.indexMap)
+                []
+        )
+
+
+{-| -}
+texturedTrianglesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, uv : ( Float, Float ) })
+texturedTrianglesIn frame =
+    Decoder
+        (\vertexData filters groups ->
+            triangularMesh
+                (addTexturedTriangles vertexData frame)
+                filters
+                groups
+                (indexState vertexData.indexMap)
+                []
+        )
+
+
+{-| -}
+texturedFacesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) })
+texturedFacesIn frame =
+    Decoder
+        (\vertexData filters groups ->
+            triangularMesh
+                (addTexturedFaces vertexData frame)
+                filters
+                groups
+                (indexState vertexData.indexMap)
+                []
+        )
+
+
+{-| -}
+polylinesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (List (Polyline3d Meters coordinates))
+polylinesIn frame =
+    Decoder
+        (\{ positions } filters groups ->
+            addPolylines (Settings positions frame filters)
+                groups
+                []
+                0
+                []
+                []
+                []
+        )
+
+
+{-| -}
+pointsIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (List (Point3d Meters coordinates))
+pointsIn frame =
+    Decoder
+        (\{ positions } filters groups ->
+            addPoints (Settings positions frame filters)
+                groups
+                []
+                0
+                []
+                []
+        )
+
+
+
+-- Internals
+
+
+type alias Face coordinates =
+    { position : Point3d Meters coordinates
+    , normal : Vector3d Unitless coordinates
+    }
+
+
+type alias TexturedTriangle coordinates =
+    { position : Point3d Meters coordinates
+    , uv : ( Float, Float )
+    }
+
+
+type alias TexturedFace coordinates =
+    { position : Point3d Meters coordinates
+    , normal : Vector3d Unitless coordinates
+    , uv : ( Float, Float )
+    }
+
+
+type alias VertexData =
+    { positions : Array (Point3d Meters ObjCoordinates)
+    , normals : Array (Direction3d ObjCoordinates)
+    , uvs : Array ( Float, Float )
+    , indexMap : Array (List Int)
+    }
+
+
+type FaceElement
+    = FaceElement Int (List Vertex)
+
+
+type LineElement
+    = LineElement Int (List Vertex)
+
+
+type PointsElement
+    = PointsElement Int (List Vertex)
+
+
+type Vertex
+    = Vertex Int (Maybe Int) (Maybe Int)
+
+
+type Group
+    = Group
+        { groups : List String
+        , object : Maybe String
+        , material : Maybe String
+        }
+        (List FaceElement)
+        (List LineElement)
+        (List PointsElement)
+
+
+type PropertyType
+    = GroupsProperty (List String)
+    | ObjectProperty String
+    | MaterialProperty String
+
+
+type Line
+    = Property PropertyType
+    | PositionData (Point3d Meters ObjCoordinates)
+    | NormalData (Direction3d ObjCoordinates)
+    | UvData ( Float, Float )
+    | FaceElementData FaceElement
+    | LineElementData LineElement
+    | PointsElementData PointsElement
+    | Error String
+    | Skip
+
+
+type alias IndexState a =
+    { maxIndex : Int
+    , indexMap : Array (List Int)
+    , vertices : List a
+    }
+
+
+indexState : Array (List Int) -> IndexState a
+indexState indexMap =
+    { maxIndex = -1
+    , indexMap = indexMap
+    , vertices = []
+    }
+
+
+{-| Defines a function that knows how to collect a certain kind of triangle
+-}
+type alias AddIndexedTriangles a =
+    Int
+    -> List Vertex
+    -> List FaceElement
+    -> Int
+    -> Array (List Int)
+    -> List a
+    -> List Int
+    -> List ( Int, Int, Int )
+    -> Result String ( IndexState a, List ( Int, Int, Int ) )
+
+
+triangularMesh : AddIndexedTriangles a -> List String -> List Group -> IndexState a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
+triangularMesh add filters groups ({ maxIndex, indexMap, vertices } as currentIndexedState) faceIndices =
+    case groups of
+        (Group _ ((FaceElement lineno elementVertices) :: faceElements) _ _) :: remainingElementGroups ->
+            case add lineno elementVertices faceElements maxIndex indexMap vertices [] faceIndices of
+                Ok ( newIndexedState, newFaceIndices ) ->
+                    triangularMesh add filters remainingElementGroups newIndexedState newFaceIndices
+
+                Err error ->
+                    Err error
+
+        (Group _ [] _ _) :: remainingElementGroups ->
+            -- skip an empty group
+            triangularMesh add filters remainingElementGroups currentIndexedState faceIndices
+
+        [] ->
+            if faceIndices == [] then
+                if filters == [] then
+                    Err "No faces found"
+
+                else
+                    Err ("No faces found for " ++ String.join ", " filters)
+
+            else
+                Ok (TriangularMesh.indexed (Array.fromList (List.reverse vertices)) faceIndices)
+
+
+groupIndices : Int -> List Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )
+groupIndices p1 more result =
+    case more of
+        p2 :: rest ->
+            case rest of
+                p3 :: _ ->
+                    -- Note that when it comes to grouping, the order of points is reversed
+                    -- but the indices were reversed too, when parsing, so this is fine :-)
+                    groupIndices p1 rest (( p1, p2, p3 ) :: result)
+
+                _ ->
+                    result
+
+        [] ->
+            result
+
+
+addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Point3d Meters coordinates)
+addTriangles vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+    case elementVertices of
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addTriangles vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
+
+        (Vertex p _ _) :: remainingVertices ->
+            case Array.get p indexMap of
+                Just [ idx ] ->
+                    addTriangles vertexData
+                        frame
+                        lineno
+                        remainingVertices
+                        elements
+                        maxIndex
+                        indexMap
+                        vertices
+                        (idx :: indices)
+                        faceIndices
+
+                _ ->
+                    case Array.get p vertexData.positions of
+                        Just vertex ->
+                            addTriangles vertexData
+                                frame
+                                lineno
+                                remainingVertices
+                                elements
+                                (maxIndex + 1)
+                                (Array.set p [ maxIndex + 1 ] indexMap)
+                                (Point3d.placeIn frame vertex :: vertices)
+                                (maxIndex + 1 :: indices)
+                                faceIndices
+
+                        Nothing ->
+                            formatError lineno "Index out of range"
+
+
+addFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Face coordinates)
+addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+    case elementVertices of
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addFaces vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
+
+        (Vertex p _ (Just n)) :: remainingVertices ->
+            let
+                lookupArray =
+                    Maybe.withDefault [] (Array.get p indexMap)
+            in
+            case lookup1 n lookupArray of
+                Just idx ->
+                    addFaces vertexData
+                        frame
+                        lineno
+                        remainingVertices
+                        elements
+                        maxIndex
+                        indexMap
+                        vertices
+                        (idx :: indices)
+                        faceIndices
+
+                Nothing ->
+                    case
+                        Maybe.map2
+                            (\position normal ->
+                                { position = Point3d.placeIn frame position
+                                , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                }
+                            )
+                            (Array.get p vertexData.positions)
+                            (Array.get n vertexData.normals)
+                    of
+                        Just vertex ->
+                            addFaces vertexData
+                                frame
+                                lineno
+                                remainingVertices
+                                elements
+                                (maxIndex + 1)
+                                (Array.set p (n :: maxIndex + 1 :: lookupArray) indexMap)
+                                (vertex :: vertices)
+                                (maxIndex + 1 :: indices)
+                                faceIndices
+
+                        Nothing ->
+                            formatError lineno "Index out of range"
+
+        (Vertex _ _ Nothing) :: _ ->
+            formatError lineno "Vertex has no normal vector"
+
+
+addTexturedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedTriangle coordinates)
+addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+    case elementVertices of
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addTexturedTriangles vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
+
+        (Vertex p (Just uv) _) :: remainingVertices ->
+            let
+                lookupArray =
+                    Maybe.withDefault [] (Array.get p indexMap)
+            in
+            case lookup1 uv lookupArray of
+                Just idx ->
+                    addTexturedTriangles vertexData
+                        frame
+                        lineno
+                        remainingVertices
+                        elements
+                        maxIndex
+                        indexMap
+                        vertices
+                        (idx :: indices)
+                        faceIndices
+
+                Nothing ->
+                    case
+                        Maybe.map2
+                            (\position uvCoord ->
+                                { position = Point3d.placeIn frame position
+                                , uv = uvCoord
+                                }
+                            )
+                            (Array.get p vertexData.positions)
+                            (Array.get uv vertexData.uvs)
+                    of
+                        Just vertex ->
+                            addTexturedTriangles vertexData
+                                frame
+                                lineno
+                                remainingVertices
+                                elements
+                                (maxIndex + 1)
+                                (Array.set p (uv :: maxIndex + 1 :: lookupArray) indexMap)
+                                (vertex :: vertices)
+                                (maxIndex + 1 :: indices)
+                                faceIndices
+
+                        Nothing ->
+                            formatError lineno "Index out of range"
+
+        (Vertex _ Nothing _) :: _ ->
+            formatError lineno "Vertex has no texture coordinates"
+
+
+addTexturedFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedFace coordinates)
+addTexturedFaces vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+    case elementVertices of
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addTexturedFaces vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
+
+        (Vertex p (Just uv) (Just n)) :: remainingVertices ->
+            let
+                lookupArray =
+                    Maybe.withDefault [] (Array.get p indexMap)
+            in
+            case lookup2 uv n lookupArray of
+                Just idx ->
+                    addTexturedFaces vertexData
+                        frame
+                        lineno
+                        remainingVertices
+                        elements
+                        maxIndex
+                        indexMap
+                        vertices
+                        (idx :: indices)
+                        faceIndices
+
+                Nothing ->
+                    case
+                        Maybe.map3
+                            (\position normal uvCoord ->
+                                { position = Point3d.placeIn frame position
+                                , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                , uv = uvCoord
+                                }
+                            )
+                            (Array.get p vertexData.positions)
+                            (Array.get n vertexData.normals)
+                            (Array.get uv vertexData.uvs)
+                    of
+                        Just vertex ->
+                            addTexturedFaces vertexData
+                                frame
+                                lineno
+                                remainingVertices
+                                elements
+                                (maxIndex + 1)
+                                (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
+                                (vertex :: vertices)
+                                (maxIndex + 1 :: indices)
+                                faceIndices
+
+                        Nothing ->
+                            formatError lineno "Index out of range"
+
+        _ ->
+            formatError lineno "Vertex missing normal vector and/or texture coordinates"
+
+
+lookup2 : Int -> Int -> List Int -> Maybe Int
+lookup2 idx1 idx2 list =
+    case list of
+        i1 :: i2 :: result :: rest ->
+            if idx1 - i1 == 0 && idx2 - i2 == 0 then
+                Just result
+
+            else
+                lookup2 idx1 idx2 rest
+
+        _ ->
+            Nothing
+
+
+lookup1 : Int -> List Int -> Maybe Int
+lookup1 idx1 list =
+    case list of
+        i1 :: result :: rest ->
+            if idx1 - i1 == 0 then
+                Just result
+
+            else
+                lookup1 idx1 rest
+
+        _ ->
+            Nothing
+
+
+type alias Settings coordinates =
+    { positions : Array (Point3d Meters ObjCoordinates)
+    , frame : Frame3d Meters coordinates { defines : ObjCoordinates }
+    , filters : List String
+    }
+
+
+addPolylines :
+    Settings coordinates
+    -> List Group
+    -> List LineElement
+    -> Int
+    -> List Vertex
+    -> List (Point3d Meters coordinates)
+    -> List (Polyline3d Meters coordinates)
+    -> Result String (List (Polyline3d Meters coordinates))
+addPolylines settings groups elements lineno vertices points_ result =
+    case vertices of
+        (Vertex p _ _) :: remainingVertices ->
+            case Array.get p settings.positions of
+                Just point ->
+                    addPolylines settings
+                        groups
+                        elements
+                        lineno
+                        remainingVertices
+                        (Point3d.placeIn settings.frame point :: points_)
+                        result
+
+                Nothing ->
+                    formatError lineno "Index out of range"
+
+        [] ->
+            let
+                newResult =
+                    if points_ == [] then
+                        result
+
+                    else
+                        -- the points are reversed, but the original indices
+                        -- were reversed too in the parser
+                        Polyline3d.fromVertices points_ :: result
+            in
+            case elements of
+                (LineElement newLineno newVertices) :: remainingElements ->
+                    addPolylines settings
+                        groups
+                        remainingElements
+                        newLineno
+                        newVertices
+                        []
+                        newResult
+
+                [] ->
+                    case groups of
+                        (Group _ _ newElements _) :: remainingGroups ->
+                            addPolylines settings
+                                remainingGroups
+                                newElements
+                                0
+                                []
+                                []
+                                newResult
+
+                        [] ->
+                            if newResult == [] then
+                                if settings.filters == [] then
+                                    Err "No lines found"
+
+                                else
+                                    Err ("No lines found for " ++ String.join ", " settings.filters)
+
+                            else
+                                Ok newResult
+
+
+addPoints :
+    Settings coordinates
+    -> List Group
+    -> List PointsElement
+    -> Int
+    -> List Vertex
+    -> List (Point3d Meters coordinates)
+    -> Result String (List (Point3d Meters coordinates))
+addPoints settings groups elements lineno vertices result =
+    case vertices of
+        (Vertex p _ _) :: remainingVertices ->
+            case Array.get p settings.positions of
+                Just point ->
+                    addPoints settings
+                        groups
+                        elements
+                        lineno
+                        remainingVertices
+                        (Point3d.placeIn settings.frame point :: result)
+
+                Nothing ->
+                    formatError lineno "Index out of range"
+
+        [] ->
+            case elements of
+                (PointsElement newLineno newVertices) :: remainingElements ->
+                    addPoints settings
+                        groups
+                        remainingElements
+                        newLineno
+                        newVertices
+                        result
+
+                [] ->
+                    case groups of
+                        (Group _ _ _ newElements) :: remainingGroups ->
+                            addPoints settings
+                                remainingGroups
+                                newElements
+                                0
+                                []
+                                result
+
+                        [] ->
+                            if result == [] then
+                                if settings.filters == [] then
+                                    Err "No points found"
+
+                                else
+                                    Err ("No points found for " ++ String.join ", " settings.filters)
+
+                            else
+                                Ok result
+
+
+decodeHelp :
+    (Float -> Length)
+    -> (VertexData -> List String -> List Group -> Result String a)
+    -> List String
+    -> Int
+    -> List (Point3d Meters ObjCoordinates)
+    -> List (Direction3d ObjCoordinates)
+    -> List ( Float, Float )
+    -> List Group
+    -> Maybe String
+    -> Maybe String
+    -> List String
+    -> List FaceElement
+    -> List LineElement
+    -> List PointsElement
+    -> Result String a
+decodeHelp units decode lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements =
+    case lines of
+        [] ->
+            let
+                positions_ =
+                    Array.fromList (List.reverse positions)
+            in
+            decode
+                { positions = positions_
+                , normals = Array.fromList (List.reverse normals)
+                , uvs = Array.fromList (List.reverse uvs)
+                , indexMap = Array.repeat (Array.length positions_) []
+                }
+                []
+                (if faceElements == [] && lineElements == [] && pointsElements == [] then
+                    groups
+
+                 else
+                    -- flush the last group
+                    Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+                )
+
+        line :: remainingLines ->
+            case parseLine lineno units line of
+                Property propertyType ->
+                    let
+                        newElementGroups =
+                            if faceElements == [] && lineElements == [] then
+                                groups
+
+                            else
+                                Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+                    in
+                    case propertyType of
+                        GroupsProperty newGroups ->
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups [] [] []
+
+                        ObjectProperty newObject ->
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ [] [] []
+
+                        MaterialProperty newMaterial ->
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] [] []
+
+                PositionData position ->
+                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                NormalData normal ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                UvData uv ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                FaceElementData faceElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (faceElement :: faceElements) lineElements pointsElements
+
+                LineElementData lineElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (lineElement :: lineElements) pointsElements
+
+                PointsElementData pointsElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (pointsElement :: pointsElements)
+
+                Skip ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                Error error ->
+                    formatError lineno error
+
+
+parseLine : Int -> (Float -> Length) -> String -> Line
+parseLine lineno units line =
+    if String.startsWith "o " line then
+        case String.trim (String.dropLeft 2 line) of
+            "" ->
+                Error "No object name"
+
+            object_ ->
+                Property (ObjectProperty object_)
+
+    else if String.startsWith "g " line || line == "g" then
+        case String.words (String.dropLeft 1 line) of
+            [] ->
+                Property (GroupsProperty [ "default" ])
+
+            [ "" ] ->
+                -- String.words "" == [""]
+                Property (GroupsProperty [ "default" ])
+
+            groups_ ->
+                Property (GroupsProperty groups_)
+
+    else if String.startsWith "usemtl " line then
+        case String.trim (String.dropLeft 7 line) of
+            "" ->
+                Error "No material name"
+
+            material_ ->
+                Property (MaterialProperty material_)
+
+    else if String.startsWith "v " line then
+        case List.map String.toFloat (String.words (String.dropLeft 2 line)) of
+            [ Just x, Just y, Just z ] ->
+                PositionData (Point3d.xyz (units x) (units y) (units z))
+
+            [ Just x, Just y, Just z, _ ] ->
+                -- skip the optional weight, that is only required for rational curves and surfaces
+                PositionData (Point3d.xyz (units x) (units y) (units z))
+
+            _ ->
+                Error "Invalid position format"
+
+    else if String.startsWith "vt " line then
+        case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
+            [ Just x, Just y ] ->
+                UvData ( x, y )
+
+            [ Just u, Just v, _ ] ->
+                -- skip the optional depth of the texture
+                UvData ( u, v )
+
+            [ Just u ] ->
+                -- set the default v=0 if it is missing
+                UvData ( u, 0 )
+
+            _ ->
+                Error "Invalid texture coordinates format"
+
+    else if String.startsWith "vn " line then
+        case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
+            [ Just x, Just y, Just z ] ->
+                NormalData (Direction3d.unsafe { x = x, y = y, z = z })
+
+            _ ->
+                Error "Invalid normal vector format"
+
+    else if String.startsWith "f " line then
+        case parseVertices (String.words (String.dropLeft 2 line)) [] of
+            Just [] ->
+                Error "Face has no vertices"
+
+            Just [ _ ] ->
+                Error "Face has less than three vertices"
+
+            Just [ _, _ ] ->
+                Error "Face has less than three vertices"
+
+            Just vertices ->
+                FaceElementData (FaceElement lineno vertices)
+
+            Nothing ->
+                Error "Invalid face format"
+
+    else if String.startsWith "l " line then
+        case parseVertices (String.words (String.dropLeft 2 line)) [] of
+            Just [] ->
+                Error "Line has no vertices"
+
+            Just [ _ ] ->
+                Error "Line has less than two vertices"
+
+            Just vertices ->
+                LineElementData (LineElement lineno vertices)
+
+            Nothing ->
+                Error "Invalid line format"
+
+    else if String.startsWith "p " line then
+        case parseVertices (String.words (String.dropLeft 2 line)) [] of
+            Just [] ->
+                Error "Points element has no vertices"
+
+            Just vertices ->
+                PointsElementData (PointsElement lineno vertices)
+
+            Nothing ->
+                Error "Invalid points format"
+
+    else if String.trim line == "" then
+        Skip
+
+    else if List.any (\prefix -> String.startsWith prefix line) skipCommands then
+        Skip
+
+    else
+        Error
+            ("Invalid OBJ syntax '"
+                ++ (if String.length line > 20 then
+                        String.left 20 line ++ "...'"
+
+                    else
+                        line ++ "'"
+                   )
+            )
+
+
+skipCommands : List String
+skipCommands =
+    [ "#" -- comment
+
+    -- Grouping
+    , "s " -- smoothing group
+    , "mg " -- merging group
+
+    -- Display/render attributes
+    , "mtllib " -- material library
+    , "bevel " -- bevel interpolation
+    , "c_interp " -- color interpolation
+    , "d_interp " -- dissolve interpolation
+    , "lod " -- level of detail
+    , "shadow_obj " -- shadow casting
+    , "trace_obj " -- ray tracing
+    , "ctech " -- curve approximation technique
+    , "stech " -- surface approximation technique
+
+    -- Free-form curve/surface attributes
+    , "cstype " -- forms of curve or surface type
+    , "deg " -- degree
+    , "bmat " -- basis matrix
+    , "step " -- step size
+
+    -- Elements
+    , "curv " -- curve
+    , "curv2 " -- 2D curve
+    , "surf " -- surface
+
+    -- Free-form curve/surface body statements
+    , "parm " -- parameter values
+    , "trim " -- outer trimming loop
+    , "hole " -- inner trimming loop
+    , "scrv " -- special curve
+    , "sp " -- special point
+    , "end " -- end statement
+
+    -- Connectivity between free-form surfaces
+    , "con " -- connect
+
+    -- General statement
+    , "call "
+    , "scmp "
+    , "csh "
+    ]
+
+
+parseVertices : List String -> List Vertex -> Maybe (List Vertex)
+parseVertices list vertices =
+    case list of
+        "" :: more ->
+            parseVertices more vertices
+
+        first :: more ->
+            case List.map String.toInt (String.split "/" first) of
+                [ Just p ] ->
+                    parseVertices more
+                        (Vertex (p - 1) Nothing Nothing :: vertices)
+
+                [ Just p, Just uv ] ->
+                    parseVertices more
+                        (Vertex (p - 1) (Just (uv - 1)) Nothing :: vertices)
+
+                [ Just p, uv, Just n ] ->
+                    parseVertices more
+                        (Vertex (p - 1) (Maybe.map (\x -> x - 1) uv) (Just (n - 1)) :: vertices)
+
+                _ ->
+                    Nothing
+
+        [] ->
+            -- Note that this reverses vertices
+            Just vertices
+
+
+formatError : Int -> String -> Result String a
+formatError lineno error =
+    Err ("Line " ++ String.fromInt lineno ++ ": " ++ error)
