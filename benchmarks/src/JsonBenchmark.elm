@@ -28,7 +28,9 @@ main =
             "JSON texturedFaces"
             (\_ -> Json.Decode.decodeString Scene3d.Mesh.Decode.texturedFaces json)
             "OBJ texturedFaces"
-            (\_ -> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces obj)
+            (\_ -> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces obj
+                |> Result.map Scene3d.Mesh.texturedFaces
+            )
 
 
 obj : String
