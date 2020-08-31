@@ -11,9 +11,9 @@ main =
     program <|
         Benchmark.compare "decode"
             "old texturedFaces"
-            (\_ -> Decode.decodeString Length.meters Decode.texturedFaces obj |> Result.map (always ()))
+            (\_ -> Decode.decodeString Length.centimeters Decode.texturedFaces obj |> Result.map (always ()))
             "texturedFaces"
-            (\_ -> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces obj |> Result.map (always ()))
+            (\_ -> Obj.Decode.decodeString Length.centimeters Obj.Decode.texturedFaces obj |> Result.map (always ()))
 
 
 obj : String

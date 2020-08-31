@@ -78,7 +78,7 @@ import Http
 import Length exposing (Length, Meters)
 import Point3d exposing (Point3d)
 import Polyline3d exposing (Polyline3d)
-import Quantity exposing (Unitless)
+import Quantity exposing (Quantity(..), Unitless)
 import Set
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
@@ -145,7 +145,11 @@ how to convert float coordinates into physical units.
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
-    decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] []
+    let
+        (Quantity ratio) =
+            units 1
+    in
+    decodeHelp ratio decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] []
 
 
 {-| Load a mesh from an [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
@@ -1255,7 +1259,7 @@ addPoints settings groups elements lineno vertices result =
 
 
 decodeHelp :
-    (Float -> Length)
+    Float
     -> (VertexData -> List String -> List Group -> Result String a)
     -> List String
     -> Int
@@ -1270,22 +1274,22 @@ decodeHelp :
     -> List LineElement
     -> List PointsElement
     -> Result String a
-decodeHelp units decode lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements =
+decodeHelp ratio decode lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements =
     case lines of
         line :: remainingLines ->
             -- cases are sorted based on the frequency
-            case parseLine lineno units line of
+            case parseLine lineno ratio line of
                 PositionData position ->
-                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                    decodeHelp ratio decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
                 NormalData normal ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                    decodeHelp ratio decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
                 UvData uv ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
+                    decodeHelp ratio decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
 
                 FaceElementData faceElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (faceElement :: faceElements) lineElements pointsElements
+                    decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (faceElement :: faceElements) lineElements pointsElements
 
                 Property propertyType ->
                     let
@@ -1298,22 +1302,22 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups [] [] []
+                            decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups [] [] []
 
                         ObjectProperty newObject ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ [] [] []
+                            decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ [] [] []
 
                         MaterialProperty newMaterial ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] [] []
+                            decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] [] []
 
                 LineElementData lineElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (lineElement :: lineElements) pointsElements
+                    decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (lineElement :: lineElements) pointsElements
 
                 PointsElementData pointsElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (pointsElement :: pointsElements)
+                    decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (pointsElement :: pointsElements)
 
                 Skip ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                    decodeHelp ratio decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
                 Error error ->
                     formatError lineno error
@@ -1339,17 +1343,17 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                 )
 
 
-parseLine : Int -> (Float -> Length) -> String -> Line
-parseLine lineno units line =
+parseLine : Int -> Float -> String -> Line
+parseLine lineno ratio line =
     -- conditions are sorted based on their frequency
     if String.startsWith "v " line then
         case List.map String.toFloat (String.words (String.dropLeft 2 line)) of
             [ Just x, Just y, Just z ] ->
-                PositionData (Point3d.xyz (units x) (units y) (units z))
+                PositionData (Point3d.unsafe { x = ratio * x, y = ratio * y, z = ratio * z })
 
             [ Just x, Just y, Just z, _ ] ->
                 -- skip the optional weight, that is only required for rational curves and surfaces
-                PositionData (Point3d.xyz (units x) (units y) (units z))
+                PositionData (Point3d.unsafe { x = ratio * x, y = ratio * y, z = ratio * z })
 
             _ ->
                 Error "Invalid position format"
