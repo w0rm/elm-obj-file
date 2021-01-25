@@ -934,33 +934,6 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
 addTexturedTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedTriangle coordinates)
 addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
     case elementVertices of
-        [] ->
-            let
-                newFaceIndices =
-                    case indices of
-                        p1 :: remainingIndices ->
-                            -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
-
-                        [] ->
-                            faceIndices
-            in
-            case elements of
-                (FaceElement newLineno newElementVertices) :: remainingElements ->
-                    addTexturedTriangles vertexData
-                        frame
-                        newLineno
-                        newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                [] ->
-                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
-
         (Vertex p (Just uv) _) :: remainingVertices ->
             let
                 lookupArray =
@@ -1008,6 +981,33 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
 
         (Vertex _ Nothing _) :: _ ->
             formatError lineno "Vertex has no texture coordinates"
+
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addTexturedTriangles vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
 
 
 addTexturedFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedFace coordinates)
@@ -1272,6 +1272,52 @@ decodeHelp :
     -> Result String a
 decodeHelp units decode lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements =
     case lines of
+        line :: remainingLines ->
+            -- cases are sorted based on the frequency
+            case parseLine lineno units line of
+                PositionData position ->
+                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                NormalData normal ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                UvData uv ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                FaceElementData faceElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (faceElement :: faceElements) lineElements pointsElements
+
+                Property propertyType ->
+                    let
+                        newElementGroups =
+                            if faceElements == [] && lineElements == [] then
+                                groups
+
+                            else
+                                Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+                    in
+                    case propertyType of
+                        GroupsProperty newGroups ->
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups [] [] []
+
+                        ObjectProperty newObject ->
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ [] [] []
+
+                        MaterialProperty newMaterial ->
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] [] []
+
+                LineElementData lineElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (lineElement :: lineElements) pointsElements
+
+                PointsElementData pointsElement ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (pointsElement :: pointsElements)
+
+                Skip ->
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+
+                Error error ->
+                    formatError lineno error
+
         [] ->
             let
                 positions_ =
@@ -1292,83 +1338,11 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                     Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
                 )
 
-        line :: remainingLines ->
-            case parseLine lineno units line of
-                Property propertyType ->
-                    let
-                        newElementGroups =
-                            if faceElements == [] && lineElements == [] then
-                                groups
-
-                            else
-                                Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
-                    in
-                    case propertyType of
-                        GroupsProperty newGroups ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ material_ newGroups [] [] []
-
-                        ObjectProperty newObject ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups (Just newObject) material_ groups_ [] [] []
-
-                        MaterialProperty newMaterial ->
-                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs newElementGroups object_ (Just newMaterial) groups_ [] [] []
-
-                PositionData position ->
-                    decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
-
-                NormalData normal ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
-
-                UvData uv ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
-
-                FaceElementData faceElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (faceElement :: faceElements) lineElements pointsElements
-
-                LineElementData lineElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (lineElement :: lineElements) pointsElements
-
-                PointsElementData pointsElement ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (pointsElement :: pointsElements)
-
-                Skip ->
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
-
-                Error error ->
-                    formatError lineno error
-
 
 parseLine : Int -> (Float -> Length) -> String -> Line
 parseLine lineno units line =
-    if String.startsWith "o " line then
-        case String.trim (String.dropLeft 2 line) of
-            "" ->
-                Error "No object name"
-
-            object_ ->
-                Property (ObjectProperty object_)
-
-    else if String.startsWith "g " line || line == "g" then
-        case String.words (String.dropLeft 1 line) of
-            [] ->
-                Property (GroupsProperty [ "default" ])
-
-            [ "" ] ->
-                -- String.words "" == [""]
-                Property (GroupsProperty [ "default" ])
-
-            groups_ ->
-                Property (GroupsProperty groups_)
-
-    else if String.startsWith "usemtl " line then
-        case String.trim (String.dropLeft 7 line) of
-            "" ->
-                Error "No material name"
-
-            material_ ->
-                Property (MaterialProperty material_)
-
-    else if String.startsWith "v " line then
+    -- conditions are sorted based on their frequency
+    if String.startsWith "v " line then
         case List.map String.toFloat (String.words (String.dropLeft 2 line)) of
             [ Just x, Just y, Just z ] ->
                 PositionData (Point3d.xyz (units x) (units y) (units z))
@@ -1406,45 +1380,64 @@ parseLine lineno units line =
 
     else if String.startsWith "f " line then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
-            Just [] ->
-                Error "Face has no vertices"
-
-            Just [ _ ] ->
-                Error "Face has less than three vertices"
-
-            Just [ _, _ ] ->
-                Error "Face has less than three vertices"
-
-            Just vertices ->
+            Just ((_ :: _ :: _ :: _) as vertices) ->
                 FaceElementData (FaceElement lineno vertices)
+
+            Just _ ->
+                Error "Face has less than three vertices"
 
             Nothing ->
                 Error "Invalid face format"
 
     else if String.startsWith "l " line then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
-            Just [] ->
-                Error "Line has no vertices"
-
-            Just [ _ ] ->
-                Error "Line has less than two vertices"
-
-            Just vertices ->
+            Just ((_ :: _ :: _) as vertices) ->
                 LineElementData (LineElement lineno vertices)
+
+            Just _ ->
+                Error "Line has less than two vertices"
 
             Nothing ->
                 Error "Invalid line format"
 
     else if String.startsWith "p " line then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
+            Just ((_ :: _) as vertices) ->
+                PointsElementData (PointsElement lineno vertices)
+
             Just [] ->
                 Error "Points element has no vertices"
 
-            Just vertices ->
-                PointsElementData (PointsElement lineno vertices)
-
             Nothing ->
                 Error "Invalid points format"
+
+    else if String.startsWith "o " line then
+        case String.trim (String.dropLeft 2 line) of
+            "" ->
+                Error "No object name"
+
+            object_ ->
+                Property (ObjectProperty object_)
+
+    else if String.startsWith "g " line || line == "g" then
+        case String.words (String.dropLeft 1 line) of
+            [] ->
+                Property (GroupsProperty [ "default" ])
+
+            [ "" ] ->
+                -- String.words "" == [""]
+                Property (GroupsProperty [ "default" ])
+
+            groups_ ->
+                Property (GroupsProperty groups_)
+
+    else if String.startsWith "usemtl " line then
+        case String.trim (String.dropLeft 7 line) of
+            "" ->
+                Error "No material name"
+
+            material_ ->
+                Property (MaterialProperty material_)
 
     else if String.trim line == "" then
         Skip

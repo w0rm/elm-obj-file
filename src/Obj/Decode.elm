@@ -447,11 +447,12 @@ oneOfHelp vertexData filters elements decoders errors =
                     oneOfHelp vertexData filters elements remainingDecoders (error :: errors)
 
         [] ->
-            if errors == [] then
-                Err "Empty oneOf decoder"
+            case errors of
+                _ :: _ ->
+                    Err ("Failed oneOf decoder: " ++ String.join ", " (List.reverse errors) ++ ".")
 
-            else
-                Err ("Failed oneOf decoder: " ++ String.join ", " (List.reverse errors) ++ ".")
+                [] ->
+                    Err "Empty oneOf decoder"
 
 
 {-| A decoder that always succeeds with the result. May be useful in combination with [`oneOf`](#oneOf) to
@@ -762,15 +763,17 @@ triangularMesh add filters groups ({ maxIndex, indexMap, vertices } as currentIn
             triangularMesh add filters remainingElementGroups currentIndexedState faceIndices
 
         [] ->
-            if faceIndices == [] then
-                if filters == [] then
-                    Err "No faces found"
+            case faceIndices of
+                _ :: _ ->
+                    Ok (TriangularMesh.indexed (Array.fromList (List.reverse vertices)) faceIndices)
 
-                else
-                    Err ("No faces found for " ++ String.join ", " filters)
+                [] ->
+                    case filters of
+                        _ :: _ ->
+                            Err ("No faces found for " ++ String.join ", " filters)
 
-            else
-                Ok (TriangularMesh.indexed (Array.fromList (List.reverse vertices)) faceIndices)
+                        [] ->
+                            Err "No faces found"
 
 
 groupIndices : Int -> List Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )
@@ -783,7 +786,7 @@ groupIndices p1 more result =
                     -- but the indices were reversed too, when parsing, so this is fine :-)
                     groupIndices p1 rest (( p1, p2, p3 ) :: result)
 
-                _ ->
+                [] ->
                     result
 
         [] ->
@@ -793,33 +796,6 @@ groupIndices p1 more result =
 addTriangles : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Point3d Meters coordinates)
 addTriangles vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
     case elementVertices of
-        [] ->
-            let
-                newFaceIndices =
-                    case indices of
-                        p1 :: remainingIndices ->
-                            -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
-
-                        [] ->
-                            faceIndices
-            in
-            case elements of
-                (FaceElement newLineno newElementVertices) :: remainingElements ->
-                    addTriangles vertexData
-                        frame
-                        newLineno
-                        newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                [] ->
-                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
-
         (Vertex p _ _) :: remainingVertices ->
             case Array.get p indexMap of
                 Just [ idx ] ->
@@ -851,10 +827,6 @@ addTriangles vertexData frame lineno elementVertices elements maxIndex indexMap 
                         Nothing ->
                             formatError lineno "Index out of range"
 
-
-addFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Face coordinates)
-addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
-    case elementVertices of
         [] ->
             let
                 newFaceIndices =
@@ -868,7 +840,7 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
             in
             case elements of
                 (FaceElement newLineno newElementVertices) :: remainingElements ->
-                    addFaces vertexData
+                    addTriangles vertexData
                         frame
                         newLineno
                         newElementVertices
@@ -882,6 +854,10 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
                 [] ->
                     Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
 
+
+addFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (Face coordinates)
+addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+    case elementVertices of
         (Vertex p _ (Just n)) :: remainingVertices ->
             let
                 lookupArray =
@@ -926,6 +902,33 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
 
                         Nothing ->
                             formatError lineno "Index out of range"
+
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addFaces vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
 
         (Vertex _ _ Nothing) :: _ ->
             formatError lineno "Vertex has no normal vector"
@@ -979,9 +982,6 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
                         Nothing ->
                             formatError lineno "Index out of range"
 
-        (Vertex _ Nothing _) :: _ ->
-            formatError lineno "Vertex has no texture coordinates"
-
         [] ->
             let
                 newFaceIndices =
@@ -1009,37 +1009,13 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
                 [] ->
                     Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
 
+        (Vertex _ Nothing _) :: _ ->
+            formatError lineno "Vertex has no texture coordinates"
+
 
 addTexturedFaces : VertexData -> Frame3d Meters coordinates { defines : ObjCoordinates } -> AddIndexedTriangles (TexturedFace coordinates)
 addTexturedFaces vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
     case elementVertices of
-        [] ->
-            let
-                newFaceIndices =
-                    case indices of
-                        p1 :: remainingIndices ->
-                            -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
-
-                        [] ->
-                            faceIndices
-            in
-            case elements of
-                (FaceElement newLineno newElementVertices) :: remainingElements ->
-                    addTexturedFaces vertexData
-                        frame
-                        newLineno
-                        newElementVertices
-                        remainingElements
-                        maxIndex
-                        indexMap
-                        vertices
-                        []
-                        newFaceIndices
-
-                [] ->
-                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
-
         (Vertex p (Just uv) (Just n)) :: remainingVertices ->
             let
                 lookupArray =
@@ -1090,6 +1066,33 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
 
                         Nothing ->
                             formatError lineno "Index out of range"
+
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addTexturedFaces vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
 
         _ ->
             formatError lineno "Vertex missing normal vector and/or texture coordinates"
@@ -1158,13 +1161,14 @@ addPolylines settings groups elements lineno vertices points_ result =
         [] ->
             let
                 newResult =
-                    if points_ == [] then
-                        result
+                    case points_ of
+                        _ :: _ ->
+                            -- the points are reversed, but the original indices
+                            -- were reversed too in the parser
+                            Polyline3d.fromVertices points_ :: result
 
-                    else
-                        -- the points are reversed, but the original indices
-                        -- were reversed too in the parser
-                        Polyline3d.fromVertices points_ :: result
+                        [] ->
+                            result
             in
             case elements of
                 (LineElement newLineno newVertices) :: remainingElements ->
@@ -1188,15 +1192,17 @@ addPolylines settings groups elements lineno vertices points_ result =
                                 newResult
 
                         [] ->
-                            if newResult == [] then
-                                if settings.filters == [] then
-                                    Err "No lines found"
+                            case newResult of
+                                _ :: _ ->
+                                    Ok newResult
 
-                                else
-                                    Err ("No lines found for " ++ String.join ", " settings.filters)
+                                [] ->
+                                    case settings.filters of
+                                        _ :: _ ->
+                                            Err ("No lines found for " ++ String.join ", " settings.filters)
 
-                            else
-                                Ok newResult
+                                        [] ->
+                                            Err "No lines found"
 
 
 addPoints :
@@ -1243,15 +1249,17 @@ addPoints settings groups elements lineno vertices result =
                                 result
 
                         [] ->
-                            if result == [] then
-                                if settings.filters == [] then
-                                    Err "No points found"
+                            case result of
+                                _ :: _ ->
+                                    Ok result
 
-                                else
-                                    Err ("No points found for " ++ String.join ", " settings.filters)
+                                [] ->
+                                    case settings.filters of
+                                        _ :: _ ->
+                                            Err ("No points found for " ++ String.join ", " settings.filters)
 
-                            else
-                                Ok result
+                                        [] ->
+                                            Err "No points found"
 
 
 decodeHelp :
@@ -1290,11 +1298,22 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                 Property propertyType ->
                     let
                         newElementGroups =
-                            if faceElements == [] && lineElements == [] then
-                                groups
+                            case faceElements of
+                                _ :: _ ->
+                                    Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
 
-                            else
-                                Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+                                [] ->
+                                    case lineElements of
+                                        _ :: _ ->
+                                            Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+
+                                        [] ->
+                                            case pointsElements of
+                                                _ :: _ ->
+                                                    Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+
+                                                [] ->
+                                                    groups
                     in
                     case propertyType of
                         GroupsProperty newGroups ->
@@ -1330,19 +1349,36 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                 , indexMap = Array.repeat (Array.length positions_) []
                 }
                 []
-                (if faceElements == [] && lineElements == [] && pointsElements == [] then
-                    groups
+                (case faceElements of
+                    _ :: _ ->
+                        -- flush the last group
+                        Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
 
-                 else
-                    -- flush the last group
-                    Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+                    [] ->
+                        case lineElements of
+                            _ :: _ ->
+                                -- flush the last group
+                                Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+
+                            [] ->
+                                case pointsElements of
+                                    _ :: _ ->
+                                        -- flush the last group
+                                        Group { groups = groups_, object = object_, material = material_ } faceElements lineElements pointsElements :: groups
+
+                                    [] ->
+                                        groups
                 )
 
 
 parseLine : Int -> (Float -> Length) -> String -> Line
 parseLine lineno units line =
+    let
+        startsWith =
+            String.slice 0 2 line
+    in
     -- conditions are sorted based on their frequency
-    if String.startsWith "v " line then
+    if startsWith == "v " then
         case List.map String.toFloat (String.words (String.dropLeft 2 line)) of
             [ Just x, Just y, Just z ] ->
                 PositionData (Point3d.xyz (units x) (units y) (units z))
@@ -1354,7 +1390,8 @@ parseLine lineno units line =
             _ ->
                 Error "Invalid position format"
 
-    else if String.startsWith "vt " line then
+    else if startsWith == "vt" then
+        -- there is no other keyword that starts with "vt", so we assume the space after "vt "
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
             [ Just x, Just y ] ->
                 UvData ( x, y )
@@ -1370,7 +1407,8 @@ parseLine lineno units line =
             _ ->
                 Error "Invalid texture coordinates format"
 
-    else if String.startsWith "vn " line then
+    else if startsWith == "vn" then
+        -- there is no other keyword that starts with "vn", so we assume the space after "vn "
         case List.map String.toFloat (String.words (String.dropLeft 3 line)) of
             [ Just x, Just y, Just z ] ->
                 NormalData (Direction3d.unsafe { x = x, y = y, z = z })
@@ -1378,7 +1416,7 @@ parseLine lineno units line =
             _ ->
                 Error "Invalid normal vector format"
 
-    else if String.startsWith "f " line then
+    else if startsWith == "f " then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
             Just ((_ :: _ :: _ :: _) as vertices) ->
                 FaceElementData (FaceElement lineno vertices)
@@ -1389,7 +1427,7 @@ parseLine lineno units line =
             Nothing ->
                 Error "Invalid face format"
 
-    else if String.startsWith "l " line then
+    else if startsWith == "l " then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
             Just ((_ :: _ :: _) as vertices) ->
                 LineElementData (LineElement lineno vertices)
@@ -1400,7 +1438,7 @@ parseLine lineno units line =
             Nothing ->
                 Error "Invalid line format"
 
-    else if String.startsWith "p " line then
+    else if startsWith == "p " then
         case parseVertices (String.words (String.dropLeft 2 line)) [] of
             Just ((_ :: _) as vertices) ->
                 PointsElementData (PointsElement lineno vertices)
@@ -1411,7 +1449,7 @@ parseLine lineno units line =
             Nothing ->
                 Error "Invalid points format"
 
-    else if String.startsWith "o " line then
+    else if startsWith == "o " then
         case String.trim (String.dropLeft 2 line) of
             "" ->
                 Error "No object name"
@@ -1419,8 +1457,8 @@ parseLine lineno units line =
             object_ ->
                 Property (ObjectProperty object_)
 
-    else if String.startsWith "g " line || line == "g" then
-        case String.words (String.dropLeft 1 line) of
+    else if startsWith == "g " || line == "g" then
+        case String.words (String.dropLeft 2 line) of
             [] ->
                 Property (GroupsProperty [ "default" ])
 
@@ -1431,7 +1469,7 @@ parseLine lineno units line =
             groups_ ->
                 Property (GroupsProperty groups_)
 
-    else if String.startsWith "usemtl " line then
+    else if "usemtl " == String.slice 0 7 line then
         case String.trim (String.dropLeft 7 line) of
             "" ->
                 Error "No material name"
