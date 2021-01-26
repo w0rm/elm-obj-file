@@ -145,7 +145,11 @@ how to convert float coordinates into physical units.
 -}
 decodeString : (Float -> Length) -> Decoder a -> String -> Result String a
 decodeString units (Decoder decode) content =
-    decodeHelp units decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] []
+    let
+        unitsFn =
+            \n -> Length.inMeters (units n)
+    in
+    decodeHelp unitsFn decode (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] []
 
 
 {-| Load a mesh from an [HTTP request](https://package.elm-lang.org/packages/elm/http/latest/).
@@ -844,46 +848,48 @@ addFaces vertexData frame lineno elementVertices elements maxIndex indexMap vert
             let
                 lookupArray =
                     Maybe.withDefault [] (Array.get p indexMap)
+
+                idx =
+                    lookup1 n lookupArray
             in
-            case lookup1 n lookupArray of
-                Just idx ->
-                    addFaces vertexData
-                        frame
-                        lineno
-                        remainingVertices
-                        elements
-                        maxIndex
-                        indexMap
-                        vertices
-                        (idx :: indices)
-                        faceIndices
+            if idx > -1 then
+                addFaces vertexData
+                    frame
+                    lineno
+                    remainingVertices
+                    elements
+                    maxIndex
+                    indexMap
+                    vertices
+                    (idx :: indices)
+                    faceIndices
 
-                Nothing ->
-                    -- pattern match for performance
-                    case Array.get p vertexData.positions of
-                        Just position ->
-                            case Array.get n vertexData.normals of
-                                Just normal ->
-                                    addFaces vertexData
-                                        frame
-                                        lineno
-                                        remainingVertices
-                                        elements
-                                        (maxIndex + 1)
-                                        (Array.set p (n :: maxIndex + 1 :: lookupArray) indexMap)
-                                        ({ position = Point3d.placeIn frame position
-                                         , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
-                                         }
-                                            :: vertices
-                                        )
-                                        (maxIndex + 1 :: indices)
-                                        faceIndices
+            else
+                -- pattern match for performance
+                case Array.get p vertexData.positions of
+                    Just position ->
+                        case Array.get n vertexData.normals of
+                            Just normal ->
+                                addFaces vertexData
+                                    frame
+                                    lineno
+                                    remainingVertices
+                                    elements
+                                    (maxIndex + 1)
+                                    (Array.set p (n :: maxIndex + 1 :: lookupArray) indexMap)
+                                    ({ position = Point3d.placeIn frame position
+                                     , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                     }
+                                        :: vertices
+                                    )
+                                    (maxIndex + 1 :: indices)
+                                    faceIndices
 
-                                Nothing ->
-                                    formatError lineno "Index out of range"
+                            Nothing ->
+                                formatError lineno "Index out of range"
 
-                        Nothing ->
-                            formatError lineno "Index out of range"
+                    Nothing ->
+                        formatError lineno "Index out of range"
 
         [] ->
             let
@@ -923,46 +929,48 @@ addTexturedTriangles vertexData frame lineno elementVertices elements maxIndex i
             let
                 lookupArray =
                     Maybe.withDefault [] (Array.get p indexMap)
+
+                idx =
+                    lookup1 uv lookupArray
             in
-            case lookup1 uv lookupArray of
-                Just idx ->
-                    addTexturedTriangles vertexData
-                        frame
-                        lineno
-                        remainingVertices
-                        elements
-                        maxIndex
-                        indexMap
-                        vertices
-                        (idx :: indices)
-                        faceIndices
+            if idx > -1 then
+                addTexturedTriangles vertexData
+                    frame
+                    lineno
+                    remainingVertices
+                    elements
+                    maxIndex
+                    indexMap
+                    vertices
+                    (idx :: indices)
+                    faceIndices
 
-                Nothing ->
-                    -- pattern match for performance
-                    case Array.get p vertexData.positions of
-                        Just position ->
-                            case Array.get uv vertexData.uvs of
-                                Just uvCoord ->
-                                    addTexturedTriangles vertexData
-                                        frame
-                                        lineno
-                                        remainingVertices
-                                        elements
-                                        (maxIndex + 1)
-                                        (Array.set p (uv :: maxIndex + 1 :: lookupArray) indexMap)
-                                        ({ position = Point3d.placeIn frame position
-                                         , uv = uvCoord
-                                         }
-                                            :: vertices
-                                        )
-                                        (maxIndex + 1 :: indices)
-                                        faceIndices
+            else
+                -- pattern match for performance
+                case Array.get p vertexData.positions of
+                    Just position ->
+                        case Array.get uv vertexData.uvs of
+                            Just uvCoord ->
+                                addTexturedTriangles vertexData
+                                    frame
+                                    lineno
+                                    remainingVertices
+                                    elements
+                                    (maxIndex + 1)
+                                    (Array.set p (uv :: maxIndex + 1 :: lookupArray) indexMap)
+                                    ({ position = Point3d.placeIn frame position
+                                     , uv = uvCoord
+                                     }
+                                        :: vertices
+                                    )
+                                    (maxIndex + 1 :: indices)
+                                    faceIndices
 
-                                Nothing ->
-                                    formatError lineno "Index out of range"
+                            Nothing ->
+                                formatError lineno "Index out of range"
 
-                        Nothing ->
-                            formatError lineno "Index out of range"
+                    Nothing ->
+                        formatError lineno "Index out of range"
 
         [] ->
             let
@@ -1002,52 +1010,54 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
             let
                 lookupArray =
                     Maybe.withDefault [] (Array.get p indexMap)
+
+                idx =
+                    lookup2 uv n lookupArray
             in
-            case lookup2 uv n lookupArray of
-                Just idx ->
-                    addTexturedFaces vertexData
-                        frame
-                        lineno
-                        remainingVertices
-                        elements
-                        maxIndex
-                        indexMap
-                        vertices
-                        (idx :: indices)
-                        faceIndices
+            if idx > -1 then
+                addTexturedFaces vertexData
+                    frame
+                    lineno
+                    remainingVertices
+                    elements
+                    maxIndex
+                    indexMap
+                    vertices
+                    (idx :: indices)
+                    faceIndices
 
-                Nothing ->
-                    -- pattern match for performance
-                    case Array.get p vertexData.positions of
-                        Just position ->
-                            case Array.get n vertexData.normals of
-                                Just normal ->
-                                    case Array.get uv vertexData.uvs of
-                                        Just uvCoord ->
-                                            addTexturedFaces vertexData
-                                                frame
-                                                lineno
-                                                remainingVertices
-                                                elements
-                                                (maxIndex + 1)
-                                                (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
-                                                ({ position = Point3d.placeIn frame position
-                                                 , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
-                                                 , uv = uvCoord
-                                                 }
-                                                    :: vertices
-                                                )
-                                                (maxIndex + 1 :: indices)
-                                                faceIndices
+            else
+                -- pattern match for performance
+                case Array.get p vertexData.positions of
+                    Just position ->
+                        case Array.get n vertexData.normals of
+                            Just normal ->
+                                case Array.get uv vertexData.uvs of
+                                    Just uvCoord ->
+                                        addTexturedFaces vertexData
+                                            frame
+                                            lineno
+                                            remainingVertices
+                                            elements
+                                            (maxIndex + 1)
+                                            (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
+                                            ({ position = Point3d.placeIn frame position
+                                             , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                             , uv = uvCoord
+                                             }
+                                                :: vertices
+                                            )
+                                            (maxIndex + 1 :: indices)
+                                            faceIndices
 
-                                        Nothing ->
-                                            formatError lineno "Index out of range"
+                                    Nothing ->
+                                        formatError lineno "Index out of range"
 
-                                Nothing ->
-                                    formatError lineno "Index out of range"
+                            Nothing ->
+                                formatError lineno "Index out of range"
 
-                        Nothing ->
-                            formatError lineno "Index out of range"
+                    Nothing ->
+                        formatError lineno "Index out of range"
 
         [] ->
             let
@@ -1080,32 +1090,36 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
             formatError lineno "Vertex missing normal vector and/or texture coordinates"
 
 
-lookup2 : Int -> Int -> List Int -> Maybe Int
+{-| returns -1 if not found
+-}
+lookup2 : Int -> Int -> List Int -> Int
 lookup2 idx1 idx2 list =
     case list of
         i1 :: i2 :: result :: rest ->
             if idx1 - i1 == 0 && idx2 - i2 == 0 then
-                Just result
+                result
 
             else
                 lookup2 idx1 idx2 rest
 
         _ ->
-            Nothing
+            -1
 
 
-lookup1 : Int -> List Int -> Maybe Int
+{-| returns -1 if not found
+-}
+lookup1 : Int -> List Int -> Int
 lookup1 idx1 list =
     case list of
         i1 :: result :: rest ->
             if idx1 - i1 == 0 then
-                Just result
+                result
 
             else
                 lookup1 idx1 rest
 
         _ ->
-            Nothing
+            -1
 
 
 type alias Settings coordinates =
@@ -1245,7 +1259,7 @@ addPoints settings groups elements lineno vertices result =
 
 
 decodeHelp :
-    (Float -> Length)
+    (Float -> Float)
     -> (VertexData -> List String -> List Group -> Result String a)
     -> List String
     -> Int
@@ -1280,62 +1294,83 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
             in
             -- conditions are sorted based on their frequency
             if startsWith == "v" then
-                case parsePosition units remainingWords of
-                    Just position ->
-                        decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                let
+                    ({ x } as position) =
+                        parsePosition units remainingWords
+                in
+                if isNaN x then
+                    formatError lineno "Invalid position format"
 
-                    Nothing ->
-                        formatError lineno "Invalid position format"
+                else
+                    decodeHelp units decode remainingLines (lineno + 1) (Point3d.fromMeters position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
             else if startsWith == "vt" then
-                case parseUv remainingWords of
-                    Just uv ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
+                let
+                    (( u, _ ) as uv) =
+                        parseUv remainingWords
+                in
+                if isNaN u then
+                    formatError lineno "Invalid texture coordinates format"
 
-                    Nothing ->
-                        formatError lineno "Invalid texture coordinates format"
+                else
+                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
 
             else if startsWith == "vn" then
                 -- there is no other keyword that starts with "vn", so we assume the space after "vn "
-                case parseNormal remainingWords of
-                    Just normal ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                let
+                    ({ x } as normal) =
+                        parseNormal remainingWords
+                in
+                if isNaN x then
+                    formatError lineno "Invalid normal vector format"
 
-                    Nothing ->
-                        formatError lineno "Invalid normal vector format"
+                else
+                    decodeHelp units decode remainingLines (lineno + 1) positions (Direction3d.unsafe normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
             else if startsWith == "f" then
                 case parseIndices remainingWords [] of
-                    Just ((_ :: _ :: _ :: _) as vertices) ->
+                    (_ :: _ :: _ :: _) as vertices ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (FaceElement lineno vertices :: faceElements) lineElements pointsElements
 
-                    Just _ ->
+                    _ :: _ ->
                         formatError lineno "Face has less than three vertices"
 
-                    Nothing ->
-                        formatError lineno "Invalid face format"
+                    [] ->
+                        case remainingWords of
+                            [] ->
+                                formatError lineno "Face has less than three vertices"
+
+                            _ ->
+                                formatError lineno "Invalid face format"
 
             else if startsWith == "l" then
                 case parseIndices remainingWords [] of
-                    Just ((_ :: _ :: _) as vertices) ->
+                    (_ :: _ :: _) as vertices ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (LineElement lineno vertices :: lineElements) pointsElements
 
-                    Just _ ->
+                    _ :: _ ->
                         formatError lineno "Line has less than two vertices"
 
-                    Nothing ->
-                        formatError lineno "Invalid line format"
+                    [] ->
+                        case remainingWords of
+                            [] ->
+                                formatError lineno "Line has less than two vertices"
+
+                            _ ->
+                                formatError lineno "Invalid line format"
 
             else if startsWith == "p" then
                 case parseIndices remainingWords [] of
-                    Just ((_ :: _) as vertices) ->
+                    (_ :: _) as vertices ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (PointsElement lineno vertices :: pointsElements)
 
-                    Just [] ->
-                        formatError lineno "Points element has no vertices"
+                    [] ->
+                        case remainingWords of
+                            [] ->
+                                formatError lineno "Points element has no vertices"
 
-                    Nothing ->
-                        formatError lineno "Invalid points format"
+                            _ ->
+                                formatError lineno "Invalid points format"
 
             else if startsWith == "o" then
                 case remainingWords of
@@ -1458,7 +1493,17 @@ skipCommands =
     ]
 
 
-parsePosition : (Float -> Length) -> List String -> Maybe (Point3d Meters ObjCoordinates)
+nanXyz : { x : Float, y : Float, z : Float }
+nanXyz =
+    { x = 0 / 0, y = 0 / 0, z = 0 / 0 }
+
+
+nanUv : ( Float, Float )
+nanUv =
+    ( 0 / 0, 0 / 0 )
+
+
+parsePosition : (Float -> Float) -> List String -> { x : Float, y : Float, z : Float }
 parsePosition units list =
     -- sometimes position has more than 3 components, with the 4th component
     -- being the optional weight, that is only required for rational curves and surfaces
@@ -1471,22 +1516,25 @@ parsePosition units list =
                         Just y ->
                             case String.toFloat sz of
                                 Just z ->
-                                    Just (Point3d.xyz (units x) (units y) (units z))
+                                    { x = units x
+                                    , y = units y
+                                    , z = units z
+                                    }
 
                                 Nothing ->
-                                    Nothing
+                                    nanXyz
 
                         Nothing ->
-                            Nothing
+                            nanXyz
 
                 Nothing ->
-                    Nothing
+                    nanXyz
 
         _ ->
-            Nothing
+            nanXyz
 
 
-parseUv : List String -> Maybe ( Float, Float )
+parseUv : List String -> ( Float, Float )
 parseUv list =
     -- sometimes uv has more than 2 components, with the 3rd component
     -- being the optional depth of the texture
@@ -1497,28 +1545,28 @@ parseUv list =
                 Just u ->
                     case String.toFloat sv of
                         Just v ->
-                            Just ( u, v )
+                            ( u, v )
 
                         Nothing ->
-                            Nothing
+                            nanUv
 
                 Nothing ->
-                    Nothing
+                    nanUv
 
         su :: [] ->
             -- set the default v=0 if it is missing
             case String.toFloat su of
                 Just u ->
-                    Just ( u, 0 )
+                    ( u, 0 )
 
                 Nothing ->
-                    Nothing
+                    nanUv
 
         _ ->
-            Nothing
+            nanUv
 
 
-parseNormal : List String -> Maybe (Direction3d ObjCoordinates)
+parseNormal : List String -> { x : Float, y : Float, z : Float }
 parseNormal list =
     -- we ignore everything after x y z for performance
     case list of
@@ -1529,22 +1577,22 @@ parseNormal list =
                         Just y ->
                             case String.toFloat sz of
                                 Just z ->
-                                    Just (Direction3d.unsafe { x = x, y = y, z = z })
+                                    { x = x, y = y, z = z }
 
                                 Nothing ->
-                                    Nothing
+                                    nanXyz
 
                         Nothing ->
-                            Nothing
+                            nanXyz
 
                 Nothing ->
-                    Nothing
+                    nanXyz
 
         _ ->
-            Nothing
+            nanXyz
 
 
-parseIndices : List String -> List Vertex -> Maybe (List Vertex)
+parseIndices : List String -> List Vertex -> List Vertex
 parseIndices list vertices =
     case list of
         first :: more ->
@@ -1564,7 +1612,7 @@ parseIndices list vertices =
                                                                 (Vertex (p - 1) (Just (uv - 1)) (Just (n - 1)) :: vertices)
 
                                                         Nothing ->
-                                                            Nothing
+                                                            []
 
                                                 [] ->
                                                     parseIndices more
@@ -1579,7 +1627,7 @@ parseIndices list vertices =
                                                                 (Vertex (p - 1) Nothing (Just (n - 1)) :: vertices)
 
                                                         Nothing ->
-                                                            Nothing
+                                                            []
 
                                                 [] ->
                                                     parseIndices more
@@ -1590,14 +1638,14 @@ parseIndices list vertices =
                                         (Vertex (p - 1) Nothing Nothing :: vertices)
 
                         Nothing ->
-                            Nothing
+                            []
 
                 [] ->
-                    Nothing
+                    []
 
         [] ->
             -- Note that this reverses vertices
-            Just vertices
+            vertices
 
 
 formatError : Int -> String -> Result String a
