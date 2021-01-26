@@ -1264,12 +1264,23 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
     case lines of
         line :: remainingLines ->
             let
+                words =
+                    String.words line
+
                 startsWith =
-                    String.slice 0 2 line
+                    case words of
+                        firstWord :: _ ->
+                            firstWord
+
+                        _ ->
+                            ""
+
+                remainingWords =
+                    List.drop 1 words
             in
             -- conditions are sorted based on their frequency
-            if startsWith == "v " then
-                case parsePosition units (String.words (String.dropLeft 2 line)) of
+            if startsWith == "v" then
+                case parsePosition units remainingWords of
                     Just position ->
                         decodeHelp units decode remainingLines (lineno + 1) (position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
@@ -1277,8 +1288,7 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                         formatError lineno "Invalid position format"
 
             else if startsWith == "vt" then
-                -- there is no other keyword that starts with "vt", so we assume the space after "vt "
-                case parseUv (String.words (String.dropLeft 3 line)) of
+                case parseUv remainingWords of
                     Just uv ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
 
@@ -1287,15 +1297,15 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
 
             else if startsWith == "vn" then
                 -- there is no other keyword that starts with "vn", so we assume the space after "vn "
-                case parseNormal (String.words (String.dropLeft 2 line)) of
+                case parseNormal remainingWords of
                     Just normal ->
                         decodeHelp units decode remainingLines (lineno + 1) positions (normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
                     Nothing ->
                         formatError lineno "Invalid normal vector format"
 
-            else if startsWith == "f " then
-                case parseIndices (String.words (String.dropLeft 2 line)) [] of
+            else if startsWith == "f" then
+                case parseIndices remainingWords [] of
                     Just ((_ :: _ :: _ :: _) as vertices) ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (FaceElement lineno vertices :: faceElements) lineElements pointsElements
 
@@ -1305,8 +1315,8 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                     Nothing ->
                         formatError lineno "Invalid face format"
 
-            else if startsWith == "l " then
-                case parseIndices (String.words (String.dropLeft 2 line)) [] of
+            else if startsWith == "l" then
+                case parseIndices remainingWords [] of
                     Just ((_ :: _ :: _) as vertices) ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (LineElement lineno vertices :: lineElements) pointsElements
 
@@ -1316,8 +1326,8 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                     Nothing ->
                         formatError lineno "Invalid line format"
 
-            else if startsWith == "p " then
-                case parseIndices (String.words (String.dropLeft 2 line)) [] of
+            else if startsWith == "p" then
+                case parseIndices remainingWords [] of
                     Just ((_ :: _) as vertices) ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (PointsElement lineno vertices :: pointsElements)
 
@@ -1327,40 +1337,32 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                     Nothing ->
                         formatError lineno "Invalid points format"
 
-            else if startsWith == "o " then
-                case String.trim (String.dropLeft 2 line) of
-                    "" ->
-                        formatError lineno "No object name"
-
-                    newObject ->
+            else if startsWith == "o" then
+                case remainingWords of
+                    newObject :: _ ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) (Just newObject) material_ groups_ [] [] []
 
-            else if startsWith == "g " || line == "g" then
-                case String.words (String.dropLeft 2 line) of
                     [] ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ [ "default" ] [] [] []
+                        formatError lineno "No object name"
 
-                    [ "" ] ->
-                        -- String.words "" == [""]
+            else if startsWith == "g" then
+                case remainingWords of
+                    [] ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ [ "default" ] [] [] []
 
                     newGroups ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ newGroups [] [] []
 
-            else if "usemtl " == String.slice 0 7 line then
-                case String.trim (String.dropLeft 7 line) of
-                    "" ->
-                        formatError lineno "No material name"
-
-                    newMaterial ->
+            else if startsWith == "usemtl" then
+                case remainingWords of
+                    newMaterial :: _ ->
                         decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ (Just newMaterial) groups_ [] [] []
 
-            else if String.trim line == "" then
-                -- Skip empty line
-                decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                    [] ->
+                        formatError lineno "No material name"
 
-            else if List.any (\prefix -> String.startsWith prefix line) skipCommands then
-                -- Skip unsupported commands
+            else if startsWith == "" || String.left 1 startsWith == "#" || List.any ((==) startsWith) skipCommands then
+                -- Skip empty lines, comments and unsupported commands
                 decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
             else
@@ -1412,75 +1414,57 @@ addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsEleme
 
 skipCommands : List String
 skipCommands =
-    [ "#" -- comment
-
-    -- Grouping
-    , "s " -- smoothing group
-    , "mg " -- merging group
+    [ -- Grouping
+      "s" -- smoothing group
+    , "mg" -- merging group
 
     -- Display/render attributes
-    , "mtllib " -- material library
-    , "bevel " -- bevel interpolation
-    , "c_interp " -- color interpolation
-    , "d_interp " -- dissolve interpolation
-    , "lod " -- level of detail
-    , "shadow_obj " -- shadow casting
-    , "trace_obj " -- ray tracing
-    , "ctech " -- curve approximation technique
-    , "stech " -- surface approximation technique
+    , "mtllib" -- material library
+    , "bevel" -- bevel interpolation
+    , "c_interp" -- color interpolation
+    , "d_interp" -- dissolve interpolation
+    , "lod" -- level of detail
+    , "shadow_obj" -- shadow casting
+    , "trace_obj" -- ray tracing
+    , "ctech" -- curve approximation technique
+    , "stech" -- surface approximation technique
 
     -- Free-form curve/surface attributes
-    , "cstype " -- forms of curve or surface type
-    , "deg " -- degree
-    , "bmat " -- basis matrix
-    , "step " -- step size
+    , "cstype" -- forms of curve or surface type
+    , "deg" -- degree
+    , "bmat" -- basis matrix
+    , "step" -- step size
 
     -- Elements
-    , "curv " -- curve
-    , "curv2 " -- 2D curve
-    , "surf " -- surface
+    , "curv" -- curve
+    , "curv2" -- 2D curve
+    , "surf" -- surface
 
     -- Free-form curve/surface body statements
-    , "parm " -- parameter values
-    , "trim " -- outer trimming loop
-    , "hole " -- inner trimming loop
-    , "scrv " -- special curve
-    , "sp " -- special point
-    , "end " -- end statement
+    , "parm" -- parameter values
+    , "trim" -- outer trimming loop
+    , "hole" -- inner trimming loop
+    , "scrv" -- special curve
+    , "sp" -- special point
+    , "end" -- end statement
 
     -- Connectivity between free-form surfaces
-    , "con " -- connect
+    , "con" -- connect
 
     -- General statement
-    , "call "
-    , "scmp "
-    , "csh "
+    , "call"
+    , "scmp"
+    , "csh"
     ]
 
 
 parsePosition : (Float -> Length) -> List String -> Maybe (Point3d Meters ObjCoordinates)
 parsePosition units list =
+    -- sometimes position has more than 3 components, with the 4th component
+    -- being the optional weight, that is only required for rational curves and surfaces
+    -- we ignore everything after x y z for performance
     case list of
-        [ sx, sy, sz ] ->
-            case String.toFloat sx of
-                Just x ->
-                    case String.toFloat sy of
-                        Just y ->
-                            case String.toFloat sz of
-                                Just z ->
-                                    Just (Point3d.xyz (units x) (units y) (units z))
-
-                                Nothing ->
-                                    Nothing
-
-                        Nothing ->
-                            Nothing
-
-                Nothing ->
-                    Nothing
-
-        [ sx, sy, sz, _ ] ->
-            -- skip the optional weight, that is only required for rational curves and surfaces
+        sx :: sy :: sz :: _ ->
             case String.toFloat sx of
                 Just x ->
                     case String.toFloat sy of
@@ -1504,8 +1488,11 @@ parsePosition units list =
 
 parseUv : List String -> Maybe ( Float, Float )
 parseUv list =
+    -- sometimes uv has more than 2 components, with the 3rd component
+    -- being the optional depth of the texture
+    -- we ignore everything after u v for performance
     case list of
-        [ su, sv ] ->
+        su :: sv :: _ ->
             case String.toFloat su of
                 Just u ->
                     case String.toFloat sv of
@@ -1518,21 +1505,7 @@ parseUv list =
                 Nothing ->
                     Nothing
 
-        [ su, sv, _ ] ->
-            -- skip the optional depth of the texture
-            case String.toFloat su of
-                Just u ->
-                    case String.toFloat sv of
-                        Just v ->
-                            Just ( u, v )
-
-                        Nothing ->
-                            Nothing
-
-                Nothing ->
-                    Nothing
-
-        [ su ] ->
+        su :: [] ->
             -- set the default v=0 if it is missing
             case String.toFloat su of
                 Just u ->
@@ -1548,7 +1521,7 @@ parseUv list =
 parseNormal : List String -> Maybe (Direction3d ObjCoordinates)
 parseNormal list =
     case list of
-        [ sx, sy, sz ] ->
+        sx :: sy :: sz :: _ ->
             case String.toFloat sx of
                 Just x ->
                     case String.toFloat sy of

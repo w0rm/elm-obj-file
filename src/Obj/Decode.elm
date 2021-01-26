@@ -1520,6 +1520,7 @@ parseUv list =
 
 parseNormal : List String -> Maybe (Direction3d ObjCoordinates)
 parseNormal list =
+    -- we ignore everything after x y z for performance
     case list of
         sx :: sy :: sz :: _ ->
             case String.toFloat sx of
@@ -1546,28 +1547,52 @@ parseNormal list =
 parseIndices : List String -> List Vertex -> Maybe (List Vertex)
 parseIndices list vertices =
     case list of
-        "" :: more ->
-            parseIndices more vertices
-
         first :: more ->
-            case List.map String.toInt (String.split "/" first) of
-                [ Just p ] ->
-                    parseIndices more
-                        (Vertex (p - 1) Nothing Nothing :: vertices)
+            case String.split "/" first of
+                pComponent :: uvnComponents ->
+                    case String.toInt pComponent of
+                        Just p ->
+                            case uvnComponents of
+                                uvComponent :: nComponents ->
+                                    case String.toInt uvComponent of
+                                        Just uv ->
+                                            case nComponents of
+                                                nComponent :: _ ->
+                                                    case String.toInt nComponent of
+                                                        Just n ->
+                                                            parseIndices more
+                                                                (Vertex (p - 1) (Just (uv - 1)) (Just (n - 1)) :: vertices)
 
-                [ Just p, Just uv ] ->
-                    parseIndices more
-                        (Vertex (p - 1) (Just (uv - 1)) Nothing :: vertices)
+                                                        Nothing ->
+                                                            Nothing
 
-                [ Just p, Just uv, Just n ] ->
-                    parseIndices more
-                        (Vertex (p - 1) (Just (uv - 1)) (Just (n - 1)) :: vertices)
+                                                [] ->
+                                                    parseIndices more
+                                                        (Vertex (p - 1) (Just (uv - 1)) Nothing :: vertices)
 
-                [ Just p, Nothing, Just n ] ->
-                    parseIndices more
-                        (Vertex (p - 1) Nothing (Just (n - 1)) :: vertices)
+                                        Nothing ->
+                                            case nComponents of
+                                                nComponent :: _ ->
+                                                    case String.toInt nComponent of
+                                                        Just n ->
+                                                            parseIndices more
+                                                                (Vertex (p - 1) Nothing (Just (n - 1)) :: vertices)
 
-                _ ->
+                                                        Nothing ->
+                                                            Nothing
+
+                                                [] ->
+                                                    parseIndices more
+                                                        (Vertex (p - 1) Nothing Nothing :: vertices)
+
+                                [] ->
+                                    parseIndices more
+                                        (Vertex (p - 1) Nothing Nothing :: vertices)
+
+                        Nothing ->
+                            Nothing
+
+                [] ->
                     Nothing
 
         [] ->
