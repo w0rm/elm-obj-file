@@ -35,3 +35,6 @@ git commit -m "Release $version"
 git tag -a $version -m "Release $version"
 git push origin $version
 elm publish
+
+# restore the main branch
+git checkout $last_commit

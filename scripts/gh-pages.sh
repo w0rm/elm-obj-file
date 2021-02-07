@@ -9,7 +9,7 @@ fi
 
 cd gh-pages
 
-if [ !"$(git branch)" == "gh-pages"]; then
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "gh-pages" ]; then
   echo "Please checkout gh-pages branch"
   exit 1;
 fi
