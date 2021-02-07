@@ -3,7 +3,9 @@ set -euxo pipefail
 
 version=${1:-}
 
-if [ ! -z "$version" ]; then
+if [ -z "$version" ]; then
+  version_path=""
+else
   version_path="/$version"
 fi
 
