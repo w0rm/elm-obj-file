@@ -8,7 +8,7 @@ _The “Pod” model by [@01k](https://mobile.twitter.com/01k) rendered with `el
 
 Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/examples/viewer/) that lets you preview OBJ files.
 
-The examples source code [can be found here](https://github.com/w0rm/elm-obj-file/tree/master/examples).
+The examples source code [can be found here](https://github.com/w0rm/elm-obj-file/tree/main/examples).
 
 ```elm
 {-| Load a mesh from an HTTP request. -}
@@ -29,9 +29,9 @@ _Note the .txt extension: this is currently required to serve files from `elm re
 
 To export an OBJ file from Blender choose `File - Export - Wavefront (.obj)`. We recommend the following settings:
 
-* **Include:** only check “Objects as OBJ Objects”;
-* **Transform:** use scale `1.00`, “Y Forward” and “Z Up” to match the Blender coordinate system;
-* **Geometry:** only check “Apply Modifiers”, check “Write Normals” for `Obj.Decode.faces` and `Obj.Decode.texturedFaces`, “Include UVs” for `Obj.Decode.texturedTriangles` and `Obj.Decode.texturedFaces`, optionally check “Write Materials” if you want to decode material names.
+- **Include:** only check “Objects as OBJ Objects”;
+- **Transform:** use scale `1.00`, “Y Forward” and “Z Up” to match the Blender coordinate system;
+- **Geometry:** only check “Apply Modifiers”, check “Write Normals” for `Obj.Decode.faces` and `Obj.Decode.texturedFaces`, “Include UVs” for `Obj.Decode.texturedTriangles` and `Obj.Decode.texturedFaces`, optionally check “Write Materials” if you want to decode material names.
 
 Blender collections are not preserved in OBJ groups. To decode individual meshes from the same file, you should rely on the `object` filter. The object name, that Blender produces, is a concatenation of the corresponding object and geometry. For example, the “Pod Body” object that contains “Mesh.001” can be decoded with `Obj.Decode.object "Pod_Body_Mesh.001"`.
 
