@@ -2,9 +2,10 @@ module DecodeBenchmark exposing (main)
 
 import Benchmark exposing (Benchmark)
 import Benchmark.Runner exposing (BenchmarkProgram, program)
+import Decode
 import Length
 import Obj.Decode
-import Decode
+
 
 main : BenchmarkProgram
 main =

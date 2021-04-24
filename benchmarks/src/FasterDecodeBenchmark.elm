@@ -2,9 +2,10 @@ module FasterDecodeBenchmark exposing (main)
 
 import Benchmark exposing (Benchmark)
 import Benchmark.Runner exposing (BenchmarkProgram, program)
+import Decode
 import Length
 import Obj.Decode
-import Decode
+
 
 main : BenchmarkProgram
 main =
@@ -17,7 +18,8 @@ main =
 
 
 obj : String
-obj = """# Blender v2.83.3 OBJ File: 'cube'
+obj =
+    """# Blender v2.83.3 OBJ File: 'cube'
 # www.blender.org
 v 1.000000 1.000000 -1.000000
 v 1.000000 -1.000000 -1.000000
