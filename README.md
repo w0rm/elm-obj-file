@@ -6,7 +6,7 @@ An Elm package to decode 3D models from the [OBJ file format](https://en.wikiped
 
 _The “Pod” model by [@01k](https://mobile.twitter.com/01k) rendered with `elm-3d-scene`. [See it live here](https://unsoundscapes.com/elm-obj-file/examples/pod/)._
 
-Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/examples/viewer/) that lets you preview OBJ files.
+Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/examples/viewer/) that lets you preview OBJ files. [The Nefertiti example](https://unsoundscapes.com/elm-obj-file/examples/nefertit/) demonstrates support for loading bumpy faces with a normal map texture.
 
 The examples source code [can be found here](https://github.com/w0rm/elm-obj-file/tree/main/examples).
 
@@ -31,7 +31,7 @@ To export an OBJ file from Blender choose `File - Export - Wavefront (.obj)`. We
 
 - **Include:** only check “Objects as OBJ Objects”;
 - **Transform:** use scale `1.00`, “Y Forward” and “Z Up” to match the Blender coordinate system;
-- **Geometry:** only check “Apply Modifiers”, check “Write Normals” for `Obj.Decode.faces` and `Obj.Decode.texturedFaces`, “Include UVs” for `Obj.Decode.texturedTriangles` and `Obj.Decode.texturedFaces`, optionally check “Write Materials” if you want to decode material names.
+- **Geometry:** only check “Apply Modifiers”, check “Write Normals” for `Obj.Decode.faces`, `Obj.Decode.texturedFaces` and `Obj.Decode.bumpyFaces`, “Include UVs” for `Obj.Decode.texturedTriangles`, `Obj.Decode.texturedFaces` and `Obj.Decode.bumpyFaces`, optionally check “Write Materials” if you want to decode material names.
 
 Blender collections are not preserved in OBJ groups. To decode individual meshes from the same file, you should rely on the `object` filter. The object name, that Blender produces, is a concatenation of the corresponding object and geometry. For example, the “Pod Body” object that contains “Mesh.001” can be decoded with `Obj.Decode.object "Pod_Body_Mesh.001"`.
 
@@ -39,6 +39,7 @@ If you want to use the shadow generation functionality from `elm-3d-scene`, your
 
 ## OBJ Format Support
 
+- [x] support for tangents needed for bumpy materials
 - [x] different combinations of positions, normal vectors and UV (texture coordinates);
 - [x] face elements `f`;
 - [x] line elements `l`;
