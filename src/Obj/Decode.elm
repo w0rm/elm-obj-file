@@ -1,13 +1,13 @@
 module Obj.Decode exposing
     ( Decoder
-    , triangles, faces, texturedTriangles, texturedFaces, polylines, points
+    , triangles, faces, texturedTriangles, texturedFaces, bumpyFaces, polylines, points
     , decodeString, expectObj
     , object, group, defaultGroup, material
     , objectNames, groupNames, materialNames
     , map, map2, map3, map4, map5
     , filter, oneOf, fail, succeed, andThen, combine
     , ObjCoordinates
-    , trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, polylinesIn, pointsIn
+    , trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, bumpyFacesIn, polylinesIn, pointsIn
     )
 
 {-|
@@ -24,7 +24,7 @@ It's also possible to [transform coordinates](#coordinate-conversion) if desired
 
 Note that all primitive decoders require at least one element and will fail if no elements are found.
 
-@docs triangles, faces, texturedTriangles, texturedFaces, polylines, points
+@docs triangles, faces, texturedTriangles, texturedFaces, bumpyFaces, polylines, points
 
 
 # Run Decoders
@@ -67,7 +67,7 @@ Metadata decoders can be also composed with advanced decoders [`andThen`](#andTh
 
 @docs ObjCoordinates
 
-@docs trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, polylinesIn, pointsIn
+@docs trianglesIn, facesIn, texturedTrianglesIn, texturedFacesIn, bumpyFacesIn, polylinesIn, pointsIn
 
 -}
 
@@ -78,7 +78,7 @@ import Http
 import Length exposing (Length, Meters)
 import Point3d exposing (Point3d)
 import Polyline3d exposing (Polyline3d)
-import Quantity exposing (Unitless)
+import Quantity exposing (Quantity(..), Unitless)
 import Set
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
@@ -118,6 +118,13 @@ texturedTriangles =
 texturedFaces : Decoder (TriangularMesh { position : Point3d Meters ObjCoordinates, normal : Vector3d Unitless ObjCoordinates, uv : ( Float, Float ) })
 texturedFaces =
     texturedFacesIn Frame3d.atOrigin
+
+
+{-| Decode positions, UV, normal vectors and tangents. Use with `Scene3d.Mesh.bumpyFaces`.
+-}
+bumpyFaces : Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ), tangent : Vector3d Unitless coordinates, tangentBasisIsRightHanded : Bool })
+bumpyFaces =
+    bumpyFacesIn Frame3d.atOrigin
 
 
 {-| -}
@@ -618,6 +625,157 @@ texturedFacesIn frame =
 
 
 {-| -}
+bumpyFacesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ), tangent : Vector3d Unitless coordinates, tangentBasisIsRightHanded : Bool })
+bumpyFacesIn frame =
+    Decoder
+        (\vertexData filters groups ->
+            triangularMesh
+                (addbumpyFaces vertexData frame)
+                filters
+                groups
+                (indexState vertexData.indexMap)
+                []
+                |> Result.map computeTangents
+        )
+
+
+computeTangents : TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ), tangent : Vector3d Unitless coordinates, bitangent : Vector3d Unitless coordinates } -> TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ), tangent : Vector3d Unitless coordinates, tangentBasisIsRightHanded : Bool }
+computeTangents mesh =
+    let
+        faceIndices =
+            TriangularMesh.faceIndices mesh
+
+        newVertices =
+            List.foldl
+                (\( i1, i2, i3 ) vertices ->
+                    case Array.get i1 vertices of
+                        Just vertex1 ->
+                            case Array.get i2 vertices of
+                                Just vertex2 ->
+                                    case Array.get i3 vertices of
+                                        Just vertex3 ->
+                                            let
+                                                p1 =
+                                                    Point3d.toMeters vertex1.position
+
+                                                p2 =
+                                                    Point3d.toMeters vertex2.position
+
+                                                p3 =
+                                                    Point3d.toMeters vertex3.position
+
+                                                ( u1, v1 ) =
+                                                    vertex1.uv
+
+                                                ( u2, v2 ) =
+                                                    vertex2.uv
+
+                                                ( u3, v3 ) =
+                                                    vertex3.uv
+
+                                                dX1 =
+                                                    p2.x - p1.x
+
+                                                dX2 =
+                                                    p3.x - p1.x
+
+                                                dY1 =
+                                                    p2.y - p1.y
+
+                                                dY2 =
+                                                    p3.y - p1.y
+
+                                                dZ1 =
+                                                    p2.z - p1.z
+
+                                                dZ2 =
+                                                    p3.z - p1.z
+
+                                                dU1 =
+                                                    u2 - u1
+
+                                                dU2 =
+                                                    u3 - u1
+
+                                                dV1 =
+                                                    v2 - v1
+
+                                                dV2 =
+                                                    v3 - v1
+
+                                                r =
+                                                    1.0 / (dU1 * dV2 - dV1 * dU2)
+
+                                                tangent =
+                                                    Vector3d.unitless
+                                                        ((dX1 * dV2 - dX2 * dV1) * r)
+                                                        ((dY1 * dV2 - dY2 * dV1) * r)
+                                                        ((dZ1 * dV2 - dZ2 * dV1) * r)
+
+                                                bitangent =
+                                                    Vector3d.unitless
+                                                        ((dX2 * dU1 - dX1 * dU2) * r)
+                                                        ((dY2 * dU1 - dY1 * dU2) * r)
+                                                        ((dZ2 * dU1 - dZ1 * dU2) * r)
+                                            in
+                                            vertices
+                                                |> Array.set i1
+                                                    { normal = vertex1.normal
+                                                    , position = vertex1.position
+                                                    , uv = vertex1.uv
+                                                    , tangent = Vector3d.plus tangent vertex1.tangent
+                                                    , bitangent = Vector3d.plus bitangent vertex1.bitangent
+                                                    }
+                                                |> Array.set i2
+                                                    { normal = vertex2.normal
+                                                    , position = vertex2.position
+                                                    , uv = vertex2.uv
+                                                    , tangent = Vector3d.plus tangent vertex2.tangent
+                                                    , bitangent = Vector3d.plus bitangent vertex2.bitangent
+                                                    }
+                                                |> Array.set i3
+                                                    { normal = vertex3.normal
+                                                    , position = vertex3.position
+                                                    , uv = vertex3.uv
+                                                    , tangent = Vector3d.plus tangent vertex3.tangent
+                                                    , bitangent = Vector3d.plus bitangent vertex3.bitangent
+                                                    }
+
+                                        Nothing ->
+                                            vertices
+
+                                Nothing ->
+                                    vertices
+
+                        Nothing ->
+                            vertices
+                )
+                (TriangularMesh.vertices mesh)
+                faceIndices
+    in
+    TriangularMesh.mapVertices
+        (\v ->
+            let
+                (Quantity dot) =
+                    Vector3d.dot v.tangent v.normal
+
+                tangent =
+                    Vector3d.normalize (Vector3d.minus (Vector3d.scaleBy dot v.normal) v.tangent)
+
+                (Quantity handednessDot) =
+                    Vector3d.dot (Vector3d.cross v.normal v.tangent) v.bitangent
+            in
+            { position = v.position
+            , uv = v.uv
+            , tangent = tangent
+            , normal = v.normal
+            , tangentBasisIsRightHanded = handednessDot > 0
+            }
+        )
+        (TriangularMesh.indexed newVertices faceIndices)
+
+
+{-| -}
 polylinesIn : Frame3d Meters coordinates { defines : ObjCoordinates } -> Decoder (List (Polyline3d Meters coordinates))
 polylinesIn frame =
     Decoder
@@ -1082,6 +1240,106 @@ addTexturedFaces vertexData frame lineno elementVertices elements maxIndex index
             case elements of
                 (FaceElement newLineno newElementVertices) :: remainingElements ->
                     addTexturedFaces vertexData
+                        frame
+                        newLineno
+                        newElementVertices
+                        remainingElements
+                        maxIndex
+                        indexMap
+                        vertices
+                        []
+                        newFaceIndices
+
+                [] ->
+                    Ok ( { maxIndex = maxIndex, indexMap = indexMap, vertices = vertices }, newFaceIndices )
+
+
+addbumpyFaces :
+    VertexData
+    -> Frame3d Meters coordinates { defines : ObjCoordinates }
+    ->
+        AddIndexedTriangles
+            { position : Point3d Meters coordinates
+            , normal : Vector3d Unitless coordinates
+            , uv : ( Float, Float )
+            , tangent : Vector3d Unitless coordinates
+            , bitangent : Vector3d Unitless coordinates
+            }
+addbumpyFaces vertexData frame lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+    case elementVertices of
+        { p, uv, n } :: remainingVertices ->
+            if uv > -1 && n > -1 then
+                let
+                    lookupArray =
+                        Maybe.withDefault [] (Array.get p indexMap)
+
+                    idx =
+                        lookup2 uv n lookupArray
+                in
+                if idx > -1 then
+                    addbumpyFaces vertexData
+                        frame
+                        lineno
+                        remainingVertices
+                        elements
+                        maxIndex
+                        indexMap
+                        vertices
+                        (idx :: indices)
+                        faceIndices
+
+                else
+                    -- pattern match for performance
+                    case Array.get p vertexData.positions of
+                        Just position ->
+                            case Array.get n vertexData.normals of
+                                Just normal ->
+                                    case Array.get uv vertexData.uvs of
+                                        Just uvCoord ->
+                                            addbumpyFaces vertexData
+                                                frame
+                                                lineno
+                                                remainingVertices
+                                                elements
+                                                (maxIndex + 1)
+                                                (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
+                                                ({ position = Point3d.placeIn frame position
+                                                 , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
+                                                 , tangent = Vector3d.unitless 0 0 0
+                                                 , bitangent = Vector3d.unitless 0 0 0
+                                                 , uv = uvCoord
+                                                 }
+                                                    :: vertices
+                                                )
+                                                (maxIndex + 1 :: indices)
+                                                faceIndices
+
+                                        Nothing ->
+                                            formatError lineno "Index out of range"
+
+                                Nothing ->
+                                    formatError lineno "Index out of range"
+
+                        Nothing ->
+                            formatError lineno "Index out of range"
+
+            else
+                formatError lineno "Vertex missing normal vector and/or texture coordinates"
+
+        [] ->
+            let
+                newFaceIndices =
+                    case indices of
+                        p1 :: remainingIndices ->
+                            -- parser guarantees at least 3 face indices
+                            groupIndices p1 remainingIndices faceIndices
+
+                        [] ->
+                            faceIndices
+            in
+            case elements of
+                (FaceElement newLineno newElementVertices) :: remainingElements ->
+                    addbumpyFaces vertexData
                         frame
                         newLineno
                         newElementVertices
