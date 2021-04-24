@@ -31,7 +31,6 @@ import Scene3d.Material exposing (Texture)
 import Scene3d.Mesh exposing (Textured, Uniform)
 import Task
 import TriangularMesh exposing (TriangularMesh)
-import Viewpoint3d
 import WebGL.Texture exposing (Error(..))
 
 
@@ -349,15 +348,13 @@ view model =
                                 |> Quantity.multiplyBy (2 - model.zoom)
 
                         camera =
-                            Camera3d.perspective
-                                { viewpoint =
-                                    Viewpoint3d.orbitZ
-                                        { focalPoint = BoundingBox3d.centerPoint boundingBox
-                                        , azimuth = model.azimuth
-                                        , elevation = model.elevation
-                                        , distance = distance
-                                        }
-                                , verticalFieldOfView = Angle.degrees 30
+                            Camera3d.orbitZ
+                                { focalPoint = BoundingBox3d.centerPoint boundingBox
+                                , azimuth = model.azimuth
+                                , elevation = model.elevation
+                                , distance = distance
+                                , projection = Camera3d.Perspective
+                                , fov = Camera3d.angle (Angle.degrees 30)
                                 }
                     in
                     [ meshView camera model.texture mesh
