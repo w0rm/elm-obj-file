@@ -1,13 +1,71 @@
-module Primitives exposing (faces, points, polylines, texturedFaces, texturedTriangles, triangles)
+module Primitives exposing
+    ( faces
+    , points
+    , polylines
+    , texturedFaces
+    , texturedTriangles
+    , triangles
+    , trianglesIn
+    )
 
+import Angle
 import Array
+import Axis3d
 import Expect
-import Length
-import Obj.Decode as Decode
+import Frame3d exposing (Frame3d)
+import Length exposing (Meters)
+import Obj.Decode as Decode exposing (ObjCoordinates)
 import Point3d
 import Polyline3d
 import Test exposing (Test)
 import TriangularMesh
+
+
+type ZUpCoords
+    = ZUpCoords
+
+
+yUpToZUpFrame : Frame3d Meters ZUpCoords { defines : ObjCoordinates }
+yUpToZUpFrame =
+    Frame3d.rotateAround Axis3d.x (Angle.degrees 90) Frame3d.atOrigin
+
+
+trianglesIn : Test
+trianglesIn =
+    Test.describe "trianglesIn"
+        [ Test.test "transforms coordinates when decoding" <|
+            \_ ->
+                let
+                    yUpResult : Result String (TriangularMesh.TriangularMesh (Point3d.Point3d Meters ObjCoordinates))
+                    yUpResult =
+                        Decode.decodeString Length.centimeters Decode.triangles objFile
+
+                    zUpResult : Result String (TriangularMesh.TriangularMesh (Point3d.Point3d Meters ZUpCoords))
+                    zUpResult =
+                        Decode.decodeString Length.centimeters (Decode.trianglesIn yUpToZUpFrame) objFile
+                in
+                Result.map2
+                    (\yUpMesh zUpMesh ->
+                        let
+                            maybeY =
+                                TriangularMesh.vertex 0 yUpMesh
+                                    |> Maybe.map (Point3d.toMeters >> .y)
+
+                            maybeZ =
+                                TriangularMesh.vertex 0 zUpMesh
+                                    |> Maybe.map (Point3d.toMeters >> .z)
+                        in
+                        case ( maybeY, maybeZ ) of
+                            ( Just y, Just z ) ->
+                                Expect.within (Expect.Absolute 0.0001) y z
+
+                            _ ->
+                                Expect.fail "Missing vertices"
+                    )
+                    yUpResult
+                    zUpResult
+                    |> Result.withDefault (Expect.fail "Failed decoding")
+        ]
 
 
 triangles : Test
