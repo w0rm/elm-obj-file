@@ -38,6 +38,20 @@ triangles =
                             , "f 1 3 4\n"
                             ]
                         )
+        , Test.test "skips empty vertices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.triangles
+                        (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ])
+                    )
+                    |> Expect.equal ""
+        , Test.test "skips empty indices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.triangles
+                        (TriangularMesh.indexed (Array.fromList [ Point3d.meters 1 2 3 ]) [])
+                    )
+                    |> Expect.equal ""
         ]
 
 
@@ -62,6 +76,26 @@ faces =
                             , "f 1//1 3//3 4//4\n"
                             ]
                         )
+        , Test.test "skips empty vertices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.faces (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ]))
+                    |> Expect.equal ""
+        , Test.test "skips empty indices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.faces
+                        (TriangularMesh.indexed
+                            (Array.fromList
+                                [ { position = Point3d.meters -4.5 4.5 0
+                                  , normal = Vector3d.unitless 0 0 1
+                                  }
+                                ]
+                            )
+                            []
+                        )
+                    )
+                    |> Expect.equal ""
         ]
 
 
@@ -86,6 +120,26 @@ texturedTriangles =
                             , "f 1/1 3/3 4/4\n"
                             ]
                         )
+        , Test.test "skips empty vertices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.texturedTriangles (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ]))
+                    |> Expect.equal ""
+        , Test.test "skips empty indices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.texturedTriangles
+                        (TriangularMesh.indexed
+                            (Array.fromList
+                                [ { position = Point3d.meters -4.5 4.5 0
+                                  , uv = ( 0, 1 )
+                                  }
+                                ]
+                            )
+                            []
+                        )
+                    )
+                    |> Expect.equal ""
         ]
 
 
@@ -114,6 +168,27 @@ texturedFaces =
                             , "f 1/1/1 3/3/3 4/4/4\n"
                             ]
                         )
+        , Test.test "skips empty vertices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.texturedFaces (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ]))
+                    |> Expect.equal ""
+        , Test.test "skips empty indices" <|
+            \_ ->
+                Encode.encode Length.inMeters
+                    (Encode.texturedFaces
+                        (TriangularMesh.indexed
+                            (Array.fromList
+                                [ { position = Point3d.meters -4.5 4.5 0
+                                  , uv = ( 0, 1 )
+                                  , normal = Vector3d.unitless 0 0 1
+                                  }
+                                ]
+                            )
+                            []
+                        )
+                    )
+                    |> Expect.equal ""
         ]
 
 

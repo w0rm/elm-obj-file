@@ -236,15 +236,18 @@ trianglesWith options mesh =
         vertices =
             TriangularMesh.vertices mesh
     in
-    case Array.length vertices of
-        0 ->
+    case ( Array.length vertices, TriangularMesh.faceIndices mesh ) of
+        ( 0, _ ) ->
             Empty
 
-        size ->
+        ( _, [] ) ->
+            Empty
+
+        ( size, indices ) ->
             Triangles options
                 size
                 (List.map positionToRecord (Array.toList vertices))
-                (TriangularMesh.faceIndices mesh)
+                indices
 
 
 {-| -}
@@ -263,15 +266,18 @@ facesWith options mesh =
             , nz = Quantity.toFloat (Vector3d.zComponent normal)
             }
     in
-    case Array.length vertices of
-        0 ->
+    case ( Array.length vertices, TriangularMesh.faceIndices mesh ) of
+        ( 0, _ ) ->
             Empty
 
-        size ->
+        ( _, [] ) ->
+            Empty
+
+        ( size, indices ) ->
             Faces options
                 size
                 (List.map vertexToRecord (Array.toList vertices))
-                (TriangularMesh.faceIndices mesh)
+                indices
 
 
 {-| -}
@@ -289,15 +295,18 @@ texturedTrianglesWith options mesh =
             , v = Tuple.second uv
             }
     in
-    case Array.length vertices of
-        0 ->
+    case ( Array.length vertices, TriangularMesh.faceIndices mesh ) of
+        ( 0, _ ) ->
             Empty
 
-        size ->
+        ( _, [] ) ->
+            Empty
+
+        ( size, indices ) ->
             TexturedTriangles options
                 size
                 (List.map vertexToRecord (Array.toList vertices))
-                (TriangularMesh.faceIndices mesh)
+                indices
 
 
 {-| -}
@@ -318,15 +327,18 @@ texturedFacesWith options mesh =
             , v = Tuple.second uv
             }
     in
-    case Array.length vertices of
-        0 ->
+    case ( Array.length vertices, TriangularMesh.faceIndices mesh ) of
+        ( 0, _ ) ->
             Empty
 
-        size ->
+        ( _, [] ) ->
+            Empty
+
+        ( size, indices ) ->
             TexturedFaces options
                 size
                 (List.map vertexToRecord (Array.toList vertices))
-                (TriangularMesh.faceIndices mesh)
+                indices
 
 
 {-| -}
