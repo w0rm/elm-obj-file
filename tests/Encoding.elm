@@ -1,5 +1,6 @@
 module Encoding exposing
     ( faces
+    , multipart
     , options
     , points
     , polylines
@@ -240,6 +241,113 @@ options =
                             , "mtllib TestMaterial\n"
                             , "v 1.000000 2.000000 3.000000\n"
                             , "p 1\n"
+                            ]
+                        )
+        ]
+
+
+multipart : Test
+multipart =
+    Test.describe "multipart"
+        [ Test.test "correctly offsets indices for triangular meshes" <|
+            \_ ->
+                Encode.encodeMultipart Length.inMeters
+                    [ Encode.triangles trianglesSquare -- offsets positions
+                    , Encode.texturedTriangles texturedFacesSquare -- offsets positions and uvs
+                    , Encode.faces texturedFacesSquare -- offsets positions and normals
+                    , Encode.texturedFaces texturedFacesSquare
+                    ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "f 1 2 3\n"
+                            , "f 1 3 4\n"
+                            , "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "vt 0.000000 1.000000\n"
+                            , "vt 1.000000 1.000000\n"
+                            , "vt 1.000000 0.000000\n"
+                            , "vt 0.000000 0.000000\n"
+
+                            -- positions + 4
+                            , "f 5/1 6/2 7/3\n"
+                            , "f 5/1 7/3 8/4\n"
+                            , "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+
+                            -- positions + 8, uvs + 4
+                            , "f 9//1 10//2 11//3\n"
+                            , "f 9//1 11//3 12//4\n"
+                            , "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "vt 0.000000 1.000000\n"
+                            , "vt 1.000000 1.000000\n"
+                            , "vt 1.000000 0.000000\n"
+                            , "vt 0.000000 0.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+
+                            -- positions + 12, uvs + 4, normals + 4
+                            , "f 13/5/5 14/6/6 15/7/7\n"
+                            , "f 13/5/5 15/7/7 16/8/8\n"
+                            ]
+                        )
+        , Test.test "correctly offsets indices for lines and points" <|
+            \_ ->
+                Encode.encodeMultipart Length.inMeters
+                    [ Encode.polylines
+                        [ Polyline3d.fromVertices
+                            [ Point3d.meters -4.5 4.5 0
+                            , Point3d.meters 4.5 4.5 0
+                            ]
+                        , Polyline3d.fromVertices
+                            [ Point3d.meters 4.5 -4.5 0
+                            , Point3d.meters -4.5 -4.5 0
+                            ]
+                        ]
+                    , Encode.points [ Point3d.meters -4.5 4.5 0, Point3d.meters 4.5 -4.5 0 ]
+                    , Encode.points [ Point3d.meters 4.5 -4.5 0 ]
+                    ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "l 1 2\n"
+                            , "l 3 4\n"
+                            , "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+
+                            -- offset by 4
+                            , "p 5\n"
+                            , "p 6\n"
+                            , "g\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+
+                            -- offset by 4 + 2 = 6
+                            , "p 7\n"
                             ]
                         )
         ]
