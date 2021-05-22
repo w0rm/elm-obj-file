@@ -1,7 +1,7 @@
 module Obj.Encode exposing
-    ( encode, encodeMultipart, Geometry
+    ( encode, Geometry
     , triangles, faces, texturedTriangles, texturedFaces, polylines, points
-    , Options, defaultOptions
+    , encodeMultipart, Options, defaultOptions
     , trianglesWith, facesWith, texturedTrianglesWith, texturedFacesWith, polylinesWith, pointsWith
     )
 
@@ -10,17 +10,17 @@ module Obj.Encode exposing
 
 # Encoding
 
-@docs encode, encodeMultipart, Geometry
+@docs encode, Geometry
 
 
-# Geometry
+# Primitives
 
 @docs triangles, faces, texturedTriangles, texturedFaces, polylines, points
 
 
 # Advanced Encoding
 
-@docs Options, defaultOptions
+@docs encodeMultipart, Options, defaultOptions
 @docs trianglesWith, facesWith, texturedTrianglesWith, texturedFacesWith, polylinesWith, pointsWith
 
 -}
@@ -42,10 +42,65 @@ that knows how to convert units.
     obj =
         encode Length.inMeters (triangles mesh)
 
+To encode multipart files, control precision or add various metadata, see
+[Advanced Encoding](#advanced-encoding).
+
 -}
 encode : (Length -> Float) -> Geometry -> String
 encode units geometry =
     encodeMultipart units [ geometry ]
+
+
+{-| Represents encoded geometry.
+-}
+type Geometry
+    = Triangles Options Int (List { px : Length, py : Length, pz : Length }) (List ( Int, Int, Int ))
+    | Faces Options Int (List { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float }) (List ( Int, Int, Int ))
+    | TexturedTriangles Options Int (List { px : Length, py : Length, pz : Length, u : Float, v : Float }) (List ( Int, Int, Int ))
+    | TexturedFaces Options Int (List { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float, u : Float, v : Float }) (List ( Int, Int, Int ))
+    | Lines Options (List (List { px : Length, py : Length, pz : Length }))
+    | Points Options (List { px : Length, py : Length, pz : Length })
+    | Empty
+
+
+{-| Encode positions.
+-}
+triangles : TriangularMesh (Point3d Meters coords) -> Geometry
+triangles =
+    trianglesWith defaultOptions
+
+
+{-| Encode positions and normal vectors.
+-}
+faces : TriangularMesh { a | position : Point3d Meters coords, normal : Vector3d Unitless coords } -> Geometry
+faces =
+    facesWith defaultOptions
+
+
+{-| Encode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
+-}
+texturedTriangles : TriangularMesh { a | position : Point3d Meters coords, uv : ( Float, Float ) } -> Geometry
+texturedTriangles =
+    texturedTrianglesWith defaultOptions
+
+
+{-| Encode positions, UV and normal vectors.
+-}
+texturedFaces : TriangularMesh { a | position : Point3d Meters coords, normal : Vector3d Unitless coords, uv : ( Float, Float ) } -> Geometry
+texturedFaces =
+    texturedFacesWith defaultOptions
+
+
+{-| -}
+polylines : List (Polyline3d Meters coords) -> Geometry
+polylines =
+    polylinesWith defaultOptions
+
+
+{-| -}
+points : List (Point3d Meters coords) -> Geometry
+points =
+    pointsWith defaultOptions
 
 
 {-| Like `encode`, but for files made of multiple parts.
@@ -55,9 +110,6 @@ encode units geometry =
             [ triangles roofMesh
             , triangles wallsMesh
             ]
-
-To control precision or label parts within a file, check
-[Advanced Encoding](#advanced-encoding).
 
 -}
 encodeMultipart : (Length -> Float) -> List Geometry -> String
@@ -133,58 +185,6 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
 
         [] ->
             result
-
-
-{-| Represents encoded geometry.
--}
-type Geometry
-    = Triangles Options Int (List { px : Length, py : Length, pz : Length }) (List ( Int, Int, Int ))
-    | Faces Options Int (List { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float }) (List ( Int, Int, Int ))
-    | TexturedTriangles Options Int (List { px : Length, py : Length, pz : Length, u : Float, v : Float }) (List ( Int, Int, Int ))
-    | TexturedFaces Options Int (List { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float, u : Float, v : Float }) (List ( Int, Int, Int ))
-    | Lines Options (List (List { px : Length, py : Length, pz : Length }))
-    | Points Options (List { px : Length, py : Length, pz : Length })
-    | Empty
-
-
-{-| Encode positions.
--}
-triangles : TriangularMesh (Point3d Meters coords) -> Geometry
-triangles =
-    trianglesWith defaultOptions
-
-
-{-| Encode positions and normal vectors.
--}
-faces : TriangularMesh { a | position : Point3d Meters coords, normal : Vector3d Unitless coords } -> Geometry
-faces =
-    facesWith defaultOptions
-
-
-{-| Encode positions and [UV](https://learnopengl.com/Getting-started/Textures) (texture) coordinates.
--}
-texturedTriangles : TriangularMesh { a | position : Point3d Meters coords, uv : ( Float, Float ) } -> Geometry
-texturedTriangles =
-    texturedTrianglesWith defaultOptions
-
-
-{-| Encode positions, UV and normal vectors.
--}
-texturedFaces : TriangularMesh { a | position : Point3d Meters coords, normal : Vector3d Unitless coords, uv : ( Float, Float ) } -> Geometry
-texturedFaces =
-    texturedFacesWith defaultOptions
-
-
-{-| -}
-polylines : List (Polyline3d Meters coords) -> Geometry
-polylines =
-    polylinesWith defaultOptions
-
-
-{-| -}
-points : List (Point3d Meters coords) -> Geometry
-points =
-    pointsWith defaultOptions
 
 
 {-| Set decimal precision for geometry and label it with object,
