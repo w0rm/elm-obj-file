@@ -238,7 +238,7 @@ options =
                         (String.concat
                             [ "o ObjectName\n"
                             , "g Group1 Group2\n"
-                            , "mtllib TestMaterial\n"
+                            , "usemtl TestMaterial\n"
                             , "v 1.000000 2.000000 3.000000\n"
                             , "p 1\n"
                             ]

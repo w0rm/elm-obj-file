@@ -367,7 +367,7 @@ encodeOptions { groups, object, material } =
                 "g " ++ String.join " " (List.map safeString grps) ++ "\n"
         , case material of
             Just mtl ->
-                "mtllib " ++ safeString mtl ++ "\n"
+                "usemtl " ++ safeString mtl ++ "\n"
 
             Nothing ->
                 ""
