@@ -121,36 +121,56 @@ encodeMultipartHelp : (Length -> Float) -> List Geometry -> Int -> Int -> Int ->
 encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
     case parts of
         (Triangles options size positions indices) :: remainingParts ->
-            encodeMultipartHelp units remainingParts (positionOffset + size) uvOffset normalOffset <|
-                result
+            encodeMultipartHelp units
+                remainingParts
+                (positionOffset + size)
+                uvOffset
+                normalOffset
+                (result
                     ++ encodeOptions options
                     ++ encodePositions (encodeFloat options.precision) units positions ""
                     ++ encodeFaceIndices (encodePositionIndex positionOffset) indices ""
+                )
 
         (Faces options size vertices indices) :: remainingParts ->
-            encodeMultipartHelp units remainingParts (positionOffset + size) uvOffset (normalOffset + size) <|
-                result
+            encodeMultipartHelp units
+                remainingParts
+                (positionOffset + size)
+                uvOffset
+                (normalOffset + size)
+                (result
                     ++ encodeOptions options
                     ++ encodePositions (encodeFloat options.precision) units vertices ""
                     ++ encodeNormals (encodeFloat options.precision) vertices ""
                     ++ encodeFaceIndices (encodeFacesIndex positionOffset normalOffset) indices ""
+                )
 
         (TexturedTriangles options size vertices indices) :: remainingParts ->
-            encodeMultipartHelp units remainingParts (positionOffset + size) (uvOffset + size) normalOffset <|
-                result
+            encodeMultipartHelp units
+                remainingParts
+                (positionOffset + size)
+                (uvOffset + size)
+                normalOffset
+                (result
                     ++ encodeOptions options
                     ++ encodePositions (encodeFloat options.precision) units vertices ""
                     ++ encodeUV (encodeFloat options.precision) vertices ""
                     ++ encodeFaceIndices (encodeTexturedTrianglesIndex positionOffset uvOffset) indices ""
+                )
 
         (TexturedFaces options size vertices indices) :: remainingParts ->
-            encodeMultipartHelp units remainingParts (positionOffset + size) (uvOffset + size) (normalOffset + size) <|
-                result
+            encodeMultipartHelp units
+                remainingParts
+                (positionOffset + size)
+                (uvOffset + size)
+                (normalOffset + size)
+                (result
                     ++ encodeOptions options
                     ++ encodePositions (encodeFloat options.precision) units vertices ""
                     ++ encodeUV (encodeFloat options.precision) vertices ""
                     ++ encodeNormals (encodeFloat options.precision) vertices ""
                     ++ encodeFaceIndices (encodeTexturedFacesIndex positionOffset uvOffset normalOffset) indices ""
+                )
 
         (Lines options lines) :: remainingParts ->
             case lines of
@@ -160,10 +180,15 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                             encodeMultipartHelp units remainingParts positionOffset uvOffset normalOffset result
 
                         ( size, encodedLines ) ->
-                            encodeMultipartHelp units remainingParts (positionOffset + size) uvOffset normalOffset <|
-                                result
+                            encodeMultipartHelp units
+                                remainingParts
+                                (positionOffset + size)
+                                uvOffset
+                                normalOffset
+                                (result
                                     ++ encodeOptions options
                                     ++ encodedLines
+                                )
 
                 [] ->
                     encodeMultipartHelp units remainingParts positionOffset uvOffset normalOffset result
@@ -174,11 +199,16 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                     encodeMultipartHelp units remainingParts positionOffset uvOffset normalOffset result
 
                 ( size, pointsIndices ) ->
-                    encodeMultipartHelp units remainingParts (positionOffset + size) uvOffset normalOffset <|
-                        result
+                    encodeMultipartHelp units
+                        remainingParts
+                        (positionOffset + size)
+                        uvOffset
+                        normalOffset
+                        (result
                             ++ encodeOptions options
                             ++ encodePositions (encodeFloat options.precision) units positions ""
                             ++ pointsIndices
+                        )
 
         Empty :: remainingParts ->
             encodeMultipartHelp units remainingParts positionOffset uvOffset normalOffset result
@@ -395,8 +425,11 @@ encodePositions : (Float -> String) -> (Length -> Float) -> List { a | px : Leng
 encodePositions encodeNumber units positions result =
     case positions of
         { px, py, pz } :: remainingPositions ->
-            encodePositions encodeNumber units remainingPositions <|
-                result
+            encodePositions
+                encodeNumber
+                units
+                remainingPositions
+                (result
                     ++ "v "
                     ++ encodeNumber (units px)
                     ++ " "
@@ -404,6 +437,7 @@ encodePositions encodeNumber units positions result =
                     ++ " "
                     ++ encodeNumber (units pz)
                     ++ "\n"
+                )
 
         [] ->
             result
@@ -413,8 +447,10 @@ encodeNormals : (Float -> String) -> List { a | nx : Float, ny : Float, nz : Flo
 encodeNormals encodeNumber normals result =
     case normals of
         { nx, ny, nz } :: remainingNormals ->
-            encodeNormals encodeNumber remainingNormals <|
-                result
+            encodeNormals
+                encodeNumber
+                remainingNormals
+                (result
                     ++ "vn "
                     ++ encodeNumber nx
                     ++ " "
@@ -422,6 +458,7 @@ encodeNormals encodeNumber normals result =
                     ++ " "
                     ++ encodeNumber nz
                     ++ "\n"
+                )
 
         [] ->
             result
@@ -431,13 +468,16 @@ encodeUV : (Float -> String) -> List { a | u : Float, v : Float } -> String -> S
 encodeUV encodeNumber uv result =
     case uv of
         { u, v } :: remainingUV ->
-            encodeUV encodeNumber remainingUV <|
-                result
+            encodeUV
+                encodeNumber
+                remainingUV
+                (result
                     ++ "vt "
                     ++ encodeNumber u
                     ++ " "
                     ++ encodeNumber v
                     ++ "\n"
+                )
 
         [] ->
             result
@@ -475,8 +515,10 @@ encodeFaceIndices : (Int -> String) -> List ( Int, Int, Int ) -> String -> Strin
 encodeFaceIndices encodeIndex indices result =
     case indices of
         ( i1, i2, i3 ) :: remainingIndices ->
-            encodeFaceIndices encodeIndex remainingIndices <|
-                result
+            encodeFaceIndices
+                encodeIndex
+                remainingIndices
+                (result
                     ++ "f "
                     ++ encodeIndex i1
                     ++ " "
@@ -484,6 +526,7 @@ encodeFaceIndices encodeIndex indices result =
                     ++ " "
                     ++ encodeIndex i3
                     ++ "\n"
+                )
 
         [] ->
             result
@@ -534,11 +577,15 @@ encodePointsIndices : Int -> List position -> Int -> String -> ( Int, String )
 encodePointsIndices positionsOffset pts count result =
     case pts of
         _ :: remainingPoints ->
-            encodePointsIndices positionsOffset remainingPoints (count + 1) <|
-                result
+            encodePointsIndices
+                positionsOffset
+                remainingPoints
+                (count + 1)
+                (result
                     ++ "p "
                     ++ String.fromInt (positionsOffset + count)
                     ++ "\n"
+                )
 
         [] ->
             ( count, result )
