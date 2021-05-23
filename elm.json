@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "w0rm/elm-obj-file",
-    "summary": "Decode 3D models from the OBJ file format",
+    "summary": "Encode and decode 3D models in the OBJ file format",
     "license": "BSD-3-Clause",
     "version": "1.1.0",
     "exposed-modules": [
