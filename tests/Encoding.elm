@@ -1,5 +1,6 @@
 module Encoding exposing
-    ( faces
+    ( compact
+    , faces
     , multipart
     , options
     , points
@@ -428,6 +429,32 @@ multipart =
         ]
 
 
+compact : Test
+compact =
+    Test.describe "compact"
+        [ Test.test "correctly reindexes texturedTriangles" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.texturedFaces suboptimalTexturedFacesSquare ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "vt 0.000000 1.000000\n"
+                            , "vt 1.000000 1.000000\n"
+                            , "vt 1.000000 0.000000\n"
+                            , "vt 0.000000 0.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "f 1/1/1 2/2/1 3/3/1\n"
+                            , "f 1/1/1 3/3/1 4/4/1\n"
+                            ]
+                        )
+        ]
+
+
 
 -- FIXTURES
 
@@ -471,6 +498,25 @@ texturedFacesSquare =
 
         faceIndices =
             [ ( 0, 1, 2 ), ( 0, 2, 3 ) ]
+    in
+    TriangularMesh.indexed vertices faceIndices
+
+
+suboptimalTexturedFacesSquare : TriangularMesh { position : Point3d Meters coords, normal : Vector3d Unitless coords, uv : ( Float, Float ) }
+suboptimalTexturedFacesSquare =
+    let
+        vertices =
+            Array.fromList
+                [ { position = Point3d.meters -4.5 4.5 0, uv = ( 0, 1 ), normal = Vector3d.unitless 0 0 1 }
+                , { position = Point3d.meters 4.5 4.5 0, uv = ( 1, 1 ), normal = Vector3d.unitless 0 0 1 }
+                , { position = Point3d.meters 4.5 -4.5 0, uv = ( 1, 0 ), normal = Vector3d.unitless 0 0 1 }
+                , { position = Point3d.meters -4.5 4.5 0, uv = ( 0, 1 ), normal = Vector3d.unitless 0 0 1 }
+                , { position = Point3d.meters 4.5 -4.5 0, uv = ( 1, 0 ), normal = Vector3d.unitless 0 0 1 }
+                , { position = Point3d.meters -4.5 -4.5 0, uv = ( 0, 0 ), normal = Vector3d.unitless 0 0 1 }
+                ]
+
+        faceIndices =
+            [ ( 0, 1, 2 ), ( 3, 4, 5 ) ]
     in
     TriangularMesh.indexed vertices faceIndices
 

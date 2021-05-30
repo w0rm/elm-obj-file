@@ -1,7 +1,7 @@
 module Obj.Encode exposing
     ( encode, Geometry
     , triangles, faces, texturedTriangles, texturedFaces, polylines, points
-    , encodeMultipart, Options, defaultOptions
+    , encodeMultipart, encodeCompact, Options, defaultOptions
     , trianglesWith, facesWith, texturedTrianglesWith, texturedFacesWith, polylinesWith, pointsWith
     )
 
@@ -20,12 +20,13 @@ module Obj.Encode exposing
 
 # Advanced Encoding
 
-@docs encodeMultipart, Options, defaultOptions
+@docs encodeMultipart, encodeCompact, Options, defaultOptions
 @docs trianglesWith, facesWith, texturedTrianglesWith, texturedFacesWith, polylinesWith, pointsWith
 
 -}
 
-import Array
+import Array exposing (Array)
+import Dict exposing (Dict)
 import Length exposing (Length, Meters)
 import Obj.Decode exposing (object)
 import Point3d exposing (Point3d)
@@ -54,10 +55,10 @@ encode units geometry =
 {-| Represents encoded geometry.
 -}
 type Geometry
-    = Triangles Options Int (List { px : Length, py : Length, pz : Length }) (List ( Int, Int, Int ))
-    | Faces Options Int (List { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float }) (List ( Int, Int, Int ))
-    | TexturedTriangles Options Int (List { px : Length, py : Length, pz : Length, u : Float, v : Float }) (List ( Int, Int, Int ))
-    | TexturedFaces Options Int (List { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float, u : Float, v : Float }) (List ( Int, Int, Int ))
+    = Triangles Options Int (Array { px : Length, py : Length, pz : Length }) (List ( Int, Int, Int ))
+    | Faces Options Int (Array { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float }) (List ( Int, Int, Int ))
+    | TexturedTriangles Options Int (Array { px : Length, py : Length, pz : Length, u : Float, v : Float }) (List ( Int, Int, Int ))
+    | TexturedFaces Options Int (Array { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float, u : Float, v : Float }) (List ( Int, Int, Int ))
     | Lines Options (List (List { px : Length, py : Length, pz : Length }))
     | Points Options (List { px : Length, py : Length, pz : Length })
     | Empty
@@ -128,7 +129,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                 normalOffset
                 (result
                     ++ encodeOptions options
-                    ++ encodePositions (encodeFloat options.precision) units positions ""
+                    ++ encodePositions (encodeFloat options.precision) units (Array.toList positions) ""
                     ++ encodeFaceIndices (encodePositionIndex positionOffset) indices ""
                 )
 
@@ -140,8 +141,8 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                 (normalOffset + size)
                 (result
                     ++ encodeOptions options
-                    ++ encodePositions (encodeFloat options.precision) units vertices ""
-                    ++ encodeNormals (encodeFloat options.precision) vertices ""
+                    ++ encodePositions (encodeFloat options.precision) units (Array.toList vertices) ""
+                    ++ encodeNormals (encodeFloat options.precision) (Array.toList vertices) ""
                     ++ encodeFaceIndices (encodeFacesIndex positionOffset normalOffset) indices ""
                 )
 
@@ -153,8 +154,8 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                 normalOffset
                 (result
                     ++ encodeOptions options
-                    ++ encodePositions (encodeFloat options.precision) units vertices ""
-                    ++ encodeUV (encodeFloat options.precision) vertices ""
+                    ++ encodePositions (encodeFloat options.precision) units (Array.toList vertices) ""
+                    ++ encodeUV (encodeFloat options.precision) (Array.toList vertices) ""
                     ++ encodeFaceIndices (encodeTexturedTrianglesIndex positionOffset uvOffset) indices ""
                 )
 
@@ -166,9 +167,9 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                 (normalOffset + size)
                 (result
                     ++ encodeOptions options
-                    ++ encodePositions (encodeFloat options.precision) units vertices ""
-                    ++ encodeUV (encodeFloat options.precision) vertices ""
-                    ++ encodeNormals (encodeFloat options.precision) vertices ""
+                    ++ encodePositions (encodeFloat options.precision) units (Array.toList vertices) ""
+                    ++ encodeUV (encodeFloat options.precision) (Array.toList vertices) ""
+                    ++ encodeNormals (encodeFloat options.precision) (Array.toList vertices) ""
                     ++ encodeFaceIndices (encodeTexturedFacesIndex positionOffset uvOffset normalOffset) indices ""
                 )
 
@@ -215,6 +216,174 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
 
         [] ->
             result
+
+
+{-| Like `encodeMultipart`, but reindexes triangular meshes.
+This is slower, but produces smaller result.
+-}
+encodeCompact : (Length -> Float) -> List Geometry -> String
+encodeCompact units parts =
+    encodeCompactHelp units parts Dict.empty 1 Dict.empty 1 Dict.empty 1 ""
+
+
+encodeCompactHelp : (Length -> Float) -> List Geometry -> Dict String Int -> Int -> Dict String Int -> Int -> Dict String Int -> Int -> String -> String
+encodeCompactHelp units parts positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset result =
+    case parts of
+        (TexturedFaces options _ vertices indices) :: remainingParts ->
+            let
+                encoded =
+                    encodeCompactTexturedFaces (encodeFloat options.precision) units vertices indices 1 positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset "" "" "" "f" ""
+            in
+            encodeCompactHelp units
+                remainingParts
+                encoded.positionIndices
+                encoded.positionOffset
+                encoded.uvIndices
+                encoded.uvOffset
+                encoded.normalIndices
+                encoded.normalOffset
+                (result
+                    ++ encodeOptions options
+                    ++ encoded.positions
+                    ++ encoded.uvs
+                    ++ encoded.normals
+                    ++ encoded.faceIndices
+                )
+
+        Empty :: remainingParts ->
+            encodeCompactHelp units remainingParts positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset result
+
+        _ :: remainingParts ->
+            encodeCompactHelp units remainingParts positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset result
+
+        [] ->
+            result
+
+
+type T4 a b c d
+    = T4 a b c d
+
+
+encodeCompactTexturedFaces :
+    (Float -> String)
+    -> (Length -> Float)
+    -> Array { px : Length, py : Length, pz : Length, nx : Float, ny : Float, nz : Float, u : Float, v : Float }
+    -> List ( Int, Int, Int )
+    -> Int
+    -> Dict String Int
+    -> Int
+    -> Dict String Int
+    -> Int
+    -> Dict String Int
+    -> Int
+    -> String
+    -> String
+    -> String
+    -> String
+    -> String
+    ->
+        { positionIndices : Dict String Int
+        , positions : String
+        , positionOffset : Int
+        , normalIndices : Dict String Int
+        , normals : String
+        , normalOffset : Int
+        , uvIndices : Dict String Int
+        , uvs : String
+        , uvOffset : Int
+        , faceIndices : String
+        }
+encodeCompactTexturedFaces encodeNumber units vertices indices indexOffset positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset positions normals uvs currentFaceIndices faceIndices =
+    case indices of
+        ( i1, i2, i3 ) :: remainingIndices ->
+            let
+                index =
+                    case indexOffset of
+                        1 ->
+                            i1
+
+                        2 ->
+                            i2
+
+                        3 ->
+                            i3
+
+                        _ ->
+                            -1
+            in
+            if index > -1 then
+                case Array.get index vertices of
+                    Just { px, py, pz, nx, ny, nz, u, v } ->
+                        let
+                            p =
+                                "v " ++ encodeNumber (units px) ++ " " ++ encodeNumber (units py) ++ " " ++ encodeNumber (units pz) ++ "\n"
+
+                            uv =
+                                "vt " ++ encodeNumber u ++ " " ++ encodeNumber v ++ "\n"
+
+                            n =
+                                "vn " ++ encodeNumber nx ++ " " ++ encodeNumber ny ++ " " ++ encodeNumber nz ++ "\n"
+
+                            (T4 newPositions pi newPositionOffset newPositionIndices) =
+                                case Dict.get p positionIndices of
+                                    Nothing ->
+                                        T4 (positions ++ p) positionOffset (positionOffset + 1) (Dict.insert p positionOffset positionIndices)
+
+                                    Just existingPositionIndex ->
+                                        T4 positions existingPositionIndex positionOffset positionIndices
+
+                            (T4 newUvs uvi newUvOffset newUvIndices) =
+                                case Dict.get uv uvIndices of
+                                    Nothing ->
+                                        T4 (uvs ++ uv) uvOffset (uvOffset + 1) (Dict.insert uv uvOffset uvIndices)
+
+                                    Just existingUvIndex ->
+                                        T4 uvs existingUvIndex uvOffset uvIndices
+
+                            (T4 newNormals ni newNormalOffset newNormalIndices) =
+                                case Dict.get n normalIndices of
+                                    Nothing ->
+                                        T4 (normals ++ n) normalOffset (normalOffset + 1) (Dict.insert n normalOffset normalIndices)
+
+                                    Just existingNormalIndex ->
+                                        T4 normals existingNormalIndex normalOffset normalIndices
+                        in
+                        encodeCompactTexturedFaces encodeNumber
+                            units
+                            vertices
+                            indices
+                            (indexOffset + 1)
+                            newPositionIndices
+                            newPositionOffset
+                            newUvIndices
+                            newUvOffset
+                            newNormalIndices
+                            newNormalOffset
+                            newPositions
+                            newNormals
+                            newUvs
+                            (currentFaceIndices ++ " " ++ String.fromInt pi ++ "/" ++ String.fromInt uvi ++ "/" ++ String.fromInt ni)
+                            faceIndices
+
+                    Nothing ->
+                        -- skip a face with out of bounds indices
+                        encodeCompactTexturedFaces encodeNumber units vertices indices (indexOffset + 1) positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset positions normals uvs "f" faceIndices
+
+            else
+                encodeCompactTexturedFaces encodeNumber units vertices remainingIndices 1 positionIndices positionOffset uvIndices uvOffset normalIndices normalOffset positions normals uvs "f" (faceIndices ++ currentFaceIndices ++ "\n")
+
+        [] ->
+            { positionIndices = positionIndices
+            , positions = positions
+            , positionOffset = positionOffset
+            , normalIndices = normalIndices
+            , normals = normals
+            , normalOffset = normalOffset
+            , uvIndices = uvIndices
+            , uvs = uvs
+            , uvOffset = uvOffset
+            , faceIndices = faceIndices
+            }
 
 
 {-| Set decimal precision for geometry and label it with object,
@@ -276,7 +445,7 @@ trianglesWith options mesh =
         ( size, indices ) ->
             Triangles options
                 size
-                (List.map positionToRecord (Array.toList vertices))
+                (Array.map positionToRecord vertices)
                 indices
 
 
@@ -306,7 +475,7 @@ facesWith options mesh =
         ( size, indices ) ->
             Faces options
                 size
-                (List.map vertexToRecord (Array.toList vertices))
+                (Array.map vertexToRecord vertices)
                 indices
 
 
@@ -335,7 +504,7 @@ texturedTrianglesWith options mesh =
         ( size, indices ) ->
             TexturedTriangles options
                 size
-                (List.map vertexToRecord (Array.toList vertices))
+                (Array.map vertexToRecord vertices)
                 indices
 
 
@@ -367,7 +536,7 @@ texturedFacesWith options mesh =
         ( size, indices ) ->
             TexturedFaces options
                 size
-                (List.map vertexToRecord (Array.toList vertices))
+                (Array.map vertexToRecord vertices)
                 indices
 
 
