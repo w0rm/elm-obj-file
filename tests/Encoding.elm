@@ -10,7 +10,7 @@ module Encoding exposing
     , triangles
     )
 
-import Array exposing (Array)
+import Array
 import Expect
 import Length exposing (Meters)
 import Obj.Encode as Encode exposing (Options, defaultOptions)
