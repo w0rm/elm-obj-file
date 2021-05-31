@@ -1,6 +1,6 @@
 module FasterDecodeBenchmark exposing (main)
 
-import Benchmark exposing (Benchmark)
+import Benchmark
 import Benchmark.Runner exposing (BenchmarkProgram, program)
 import Decode
 import Length

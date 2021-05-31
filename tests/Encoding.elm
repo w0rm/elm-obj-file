@@ -10,7 +10,7 @@ module Encoding exposing
     , triangles
     )
 
-import Array
+import Array exposing (Array)
 import Expect
 import Length exposing (Meters)
 import Obj.Encode as Encode exposing (Options, defaultOptions)
@@ -432,7 +432,57 @@ multipart =
 compact : Test
 compact =
     Test.describe "compact"
-        [ Test.test "correctly reindexes texturedTriangles" <|
+        [ Test.test "correctly reindexes triangles" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.triangles trianglesSquare ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "f 1 2 3\n"
+                            , "f 1 3 4\n"
+                            ]
+                        )
+        , Test.test "correctly reindexes faces" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.faces suboptimalTexturedFacesSquare ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "vn 0.000000 0.000000 1.000000\n"
+                            , "f 1//1 2//1 3//1\n"
+                            , "f 1//1 3//1 4//1\n"
+                            ]
+                        )
+        , Test.test "correctly reindexes texturedTriangles" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.texturedTriangles suboptimalTexturedFacesSquare ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "vt 0.000000 1.000000\n"
+                            , "vt 1.000000 1.000000\n"
+                            , "vt 1.000000 0.000000\n"
+                            , "vt 0.000000 0.000000\n"
+                            , "f 1/1 2/2 3/3\n"
+                            , "f 1/1 3/3 4/4\n"
+                            ]
+                        )
+        , Test.test "correctly reindexes texturedFaces" <|
             \_ ->
                 Encode.encodeCompact Length.inMeters
                     [ Encode.texturedFaces suboptimalTexturedFacesSquare ]
@@ -452,6 +502,78 @@ compact =
                             , "f 1/1/1 3/3/1 4/4/1\n"
                             ]
                         )
+        , Test.test "correctly reindexes lines" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.polylines
+                        [ Polyline3d.fromVertices
+                            [ Point3d.meters -4.5 4.5 0
+                            , Point3d.meters 4.5 4.5 0
+                            ]
+                        , Polyline3d.fromVertices
+                            [ Point3d.meters 4.5 -4.5 0
+                            , Point3d.meters -4.5 -4.5 0
+                            ]
+                        , Polyline3d.fromVertices
+                            [ Point3d.meters -4.5 4.5 0
+                            , Point3d.meters -4.5 -4.5 0
+                            ]
+                        ]
+                    ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "l 1 2\n"
+                            , "l 3 4\n"
+                            , "l 1 4\n"
+                            ]
+                        )
+        , Test.test "correctly reindexes points" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.points
+                        [ Point3d.meters -4.5 4.5 0
+                        , Point3d.meters 4.5 4.5 0
+                        , Point3d.meters 4.5 -4.5 0
+                        , Point3d.meters -4.5 -4.5 0
+                        , Point3d.meters -4.5 4.5 0
+                        , Point3d.meters -4.5 -4.5 0
+                        ]
+                    ]
+                    |> Expect.equal
+                        (String.concat
+                            [ "g\n"
+                            , "v -4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 4.500000 0.000000\n"
+                            , "v 4.500000 -4.500000 0.000000\n"
+                            , "v -4.500000 -4.500000 0.000000\n"
+                            , "p 1\n"
+                            , "p 2\n"
+                            , "p 3\n"
+                            , "p 4\n"
+                            , "p 1\n"
+                            , "p 4\n"
+                            ]
+                        )
+        , Test.test "skips empty polylines" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.polylines [] ]
+                    |> Expect.equal ""
+        , Test.test "skips polylines without vertices" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.polylines [ Polyline3d.fromVertices [] ] ]
+                    |> Expect.equal ""
+        , Test.test "skips empty meshes" <|
+            \_ ->
+                Encode.encodeCompact Length.inMeters
+                    [ Encode.triangles TriangularMesh.empty ]
+                    |> Expect.equal ""
         ]
 
 
