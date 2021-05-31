@@ -17,9 +17,9 @@ main =
     program <|
         Benchmark.compare "encode"
             "old texturedFaces"
-            (\_ -> Encode.encode Length.inMeters (Encode.texturedFaces mesh ))
+            (\_ -> Encode.encode Length.inMeters (Encode.texturedFaces mesh))
             "texturedFaces"
-            (\_ -> Obj.Encode.encode Length.inMeters ( Obj.Encode.texturedFaces mesh ))
+            (\_ -> Obj.Encode.encode Length.inMeters (Obj.Encode.texturedFaces mesh))
 
 
 mesh : TriangularMesh.TriangularMesh { position : Point3d Length.Meters Obj.Decode.ObjCoordinates, normal : Vector3d Unitless Obj.Decode.ObjCoordinates, uv : ( Float, Float ) }
