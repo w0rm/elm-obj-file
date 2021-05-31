@@ -1,24 +1,29 @@
-module DecodeBenchmark exposing (main)
+module EncodeBenchmark exposing (main)
 
 import Benchmark
 import Benchmark.Runner exposing (BenchmarkProgram, program)
-import Decode
+import Encode
 import Length
 import Obj.Decode
+import Obj.Encode
+import Point3d exposing (Point3d)
+import Quantity exposing (Unitless)
+import TriangularMesh
+import Vector3d exposing (Vector3d)
 
 
 main : BenchmarkProgram
 main =
     program <|
-        Benchmark.compare "decode"
+        Benchmark.compare "encode"
             "old texturedFaces"
-            (\_ -> Decode.decodeString Length.meters Decode.texturedFaces obj |> Result.map (always ()))
+            (\_ -> Encode.encode Length.inMeters (Encode.texturedFaces mesh))
             "texturedFaces"
-            (\_ -> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces obj |> Result.map (always ()))
+            (\_ -> Obj.Encode.encode Length.inMeters (Obj.Encode.texturedFaces mesh))
 
 
-obj : String
-obj =
+mesh : TriangularMesh.TriangularMesh { position : Point3d Length.Meters Obj.Decode.ObjCoordinates, normal : Vector3d Unitless Obj.Decode.ObjCoordinates, uv : ( Float, Float ) }
+mesh =
     """# Blender v2.90 (sub 0) OBJ File: 'pod.blend'
 # www.blender.org
 mtllib swivel.mtl
@@ -691,3 +696,5 @@ f 12/30/157 15/37/157 91/31/157
 f 27/54/158 12/30/158 85/32/158
 f 92/128/159 11/17/159 86/19/159
 """
+        |> Obj.Decode.decodeString Length.meters Obj.Decode.texturedFaces
+        |> Result.withDefault TriangularMesh.empty
