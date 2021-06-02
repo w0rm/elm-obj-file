@@ -1212,13 +1212,20 @@ encodeFloat precision =
                 round ((1 + absolute - toFloat integer) * decimals)
 
             fractionStr =
-                String.dropLeft 1 (String.fromInt fraction)
+                String.fromInt fraction
+
+            incrementedInteger =
+                if String.left 1 fractionStr == "2" then
+                    integer + 1
+
+                else
+                    integer
         in
         if isNaN (float - float) then
             String.padRight (n + 2) '0' "0."
 
         else if float >= 0 then
-            String.fromInt integer ++ "." ++ fractionStr
+            String.fromInt incrementedInteger ++ "." ++ String.dropLeft 1 fractionStr
 
         else
-            "-" ++ String.fromInt integer ++ "." ++ fractionStr
+            "-" ++ String.fromInt incrementedInteger ++ "." ++ String.dropLeft 1 fractionStr
