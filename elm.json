@@ -3,7 +3,7 @@
     "name": "w0rm/elm-obj-file",
     "summary": "Encode and decode 3D models in the OBJ file format",
     "license": "BSD-3-Clause",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "exposed-modules": [
         "Obj.Encode",
         "Obj.Decode"
