@@ -131,6 +131,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                     ++ encodeOptions options
                     ++ encodePositions (encodeLength options.precision units) (Array.toList positions) ""
                     ++ encodeFaceIndices (encodePositionIndex positionOffset) indices ""
+                    ++ ""
                 )
 
         (Faces options size vertices indices) :: remainingParts ->
@@ -148,6 +149,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                     ++ encodePositions (encodeLength options.precision units) verticesList ""
                     ++ encodeNormals verticesList ""
                     ++ encodeFaceIndices (encodeFacesIndex positionOffset normalOffset) indices ""
+                    ++ ""
                 )
 
         (TexturedTriangles options size vertices indices) :: remainingParts ->
@@ -165,6 +167,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                     ++ encodePositions (encodeLength options.precision units) verticesList ""
                     ++ encodeUvs verticesList ""
                     ++ encodeFaceIndices (encodeTexturedTrianglesIndex positionOffset uvOffset) indices ""
+                    ++ ""
                 )
 
         (TexturedFaces options size vertices indices) :: remainingParts ->
@@ -183,6 +186,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                     ++ encodeUvs verticesList ""
                     ++ encodeNormals verticesList ""
                     ++ encodeFaceIndices (encodeTexturedFacesIndex positionOffset uvOffset normalOffset) indices ""
+                    ++ ""
                 )
 
         (Lines options lines) :: remainingParts ->
@@ -198,7 +202,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                                 newPositionOffset
                                 uvOffset
                                 normalOffset
-                                (result ++ encodeOptions options ++ encodedLines)
+                                (result ++ encodeOptions options ++ encodedLines ++ "")
 
                 [] ->
                     encodeMultipartHelp units remainingParts positionOffset uvOffset normalOffset result
@@ -217,6 +221,7 @@ encodeMultipartHelp units parts positionOffset uvOffset normalOffset result =
                     ++ encodeOptions options
                     ++ encodePositions (encodeLength options.precision units) positions ""
                     ++ pointsIndices
+                    ++ ""
                 )
 
         Empty :: remainingParts ->
@@ -249,7 +254,7 @@ encodeCompactHelp units parts indicesMap positionOffset uvOffset normalOffset re
                 encoded.positionOffset
                 uvOffset
                 normalOffset
-                (result ++ encodeOptions options ++ encoded.result)
+                (result ++ encodeOptions options ++ encoded.result ++ "")
 
         (Faces options _ vertices indices) :: remainingParts ->
             let
@@ -262,7 +267,7 @@ encodeCompactHelp units parts indicesMap positionOffset uvOffset normalOffset re
                 encoded.positionOffset
                 uvOffset
                 encoded.normalOffset
-                (result ++ encodeOptions options ++ encoded.result)
+                (result ++ encodeOptions options ++ encoded.result ++ "")
 
         (TexturedTriangles options _ vertices indices) :: remainingParts ->
             let
@@ -275,7 +280,7 @@ encodeCompactHelp units parts indicesMap positionOffset uvOffset normalOffset re
                 encoded.positionOffset
                 encoded.uvOffset
                 normalOffset
-                (result ++ encodeOptions options ++ encoded.result)
+                (result ++ encodeOptions options ++ encoded.result ++ "")
 
         (TexturedFaces options _ vertices indices) :: remainingParts ->
             let
@@ -288,7 +293,7 @@ encodeCompactHelp units parts indicesMap positionOffset uvOffset normalOffset re
                 encoded.positionOffset
                 encoded.uvOffset
                 encoded.normalOffset
-                (result ++ encodeOptions options ++ encoded.result)
+                (result ++ encodeOptions options ++ encoded.result ++ "")
 
         (Lines options lines) :: remainingParts ->
             case lines of
@@ -307,7 +312,7 @@ encodeCompactHelp units parts indicesMap positionOffset uvOffset normalOffset re
                             encoded.positionOffset
                             uvOffset
                             normalOffset
-                            (result ++ encodeOptions options ++ encoded.result)
+                            (result ++ encodeOptions options ++ encoded.result ++ "")
 
                 [] ->
                     encodeCompactHelp units remainingParts indicesMap positionOffset uvOffset normalOffset result
@@ -323,7 +328,7 @@ encodeCompactHelp units parts indicesMap positionOffset uvOffset normalOffset re
                 encoded.positionOffset
                 uvOffset
                 normalOffset
-                (result ++ encodeOptions options ++ encoded.result)
+                (result ++ encodeOptions options ++ encoded.result ++ "")
 
         Empty :: remainingParts ->
             encodeCompactHelp units remainingParts indicesMap positionOffset uvOffset normalOffset result
@@ -359,7 +364,7 @@ encodeCompactPolylines lengthToString lines vertices indicesMap positionOffset r
                         remainingVertices
                         (Dict.insert p positionOffset indicesMap)
                         (positionOffset + 1)
-                        (resultVertices ++ p)
+                        (resultVertices ++ p ++ "")
                         (resultIndices ++ " " ++ String.fromInt positionOffset)
 
                 Just existingPositionIndex ->
@@ -425,7 +430,7 @@ encodeCompactPoints lengthToString vertices indicesMap positionOffset positions 
                         remainingVertices
                         (Dict.insert p positionOffset indicesMap)
                         (positionOffset + 1)
-                        (positions ++ p)
+                        (positions ++ p ++ "")
                         (pointIndices ++ "p " ++ String.fromInt positionOffset ++ "\n")
 
                 Just existingPositionIndex ->
@@ -439,7 +444,7 @@ encodeCompactPoints lengthToString vertices indicesMap positionOffset positions 
         [] ->
             { indicesMap = indicesMap
             , positionOffset = positionOffset
-            , result = positions ++ pointIndices
+            , result = positions ++ pointIndices ++ ""
             }
 
 
@@ -491,7 +496,7 @@ encodeCompactTriangles lengthToString vertices indices indexOffset indicesMap po
                                     (indexOffset + 1)
                                     (Dict.insert p positionOffset indicesMap)
                                     (positionOffset + 1)
-                                    (positions ++ p)
+                                    (positions ++ p ++ "")
                                     (currentFaceIndices ++ " " ++ String.fromInt positionOffset)
                                     faceIndices
 
@@ -518,7 +523,7 @@ encodeCompactTriangles lengthToString vertices indices indexOffset indicesMap po
         [] ->
             { indicesMap = indicesMap
             , positionOffset = positionOffset
-            , result = positions ++ faceIndices
+            , result = positions ++ faceIndices ++ ""
             }
 
 
@@ -572,7 +577,7 @@ encodeCompactFaces lengthToString vertices indices indexOffset indicesMap positi
                             (T4 newPositions pi newPositionOffset indicesMap1) =
                                 case Dict.get p indicesMap of
                                     Nothing ->
-                                        T4 (positions ++ p) positionOffset (positionOffset + 1) (Dict.insert p positionOffset indicesMap)
+                                        T4 (positions ++ p ++ "") positionOffset (positionOffset + 1) (Dict.insert p positionOffset indicesMap)
 
                                     Just existingPositionIndex ->
                                         T4 positions existingPositionIndex positionOffset indicesMap
@@ -580,7 +585,7 @@ encodeCompactFaces lengthToString vertices indices indexOffset indicesMap positi
                             (T4 newNormals ni newNormalOffset indicesMap2) =
                                 case Dict.get normal indicesMap1 of
                                     Nothing ->
-                                        T4 (normals ++ normal) normalOffset (normalOffset + 1) (Dict.insert normal normalOffset indicesMap1)
+                                        T4 (normals ++ normal ++ "") normalOffset (normalOffset + 1) (Dict.insert normal normalOffset indicesMap1)
 
                                     Just existingNormalIndex ->
                                         T4 normals existingNormalIndex normalOffset indicesMap1
@@ -608,7 +613,7 @@ encodeCompactFaces lengthToString vertices indices indexOffset indicesMap positi
             { indicesMap = indicesMap
             , positionOffset = positionOffset
             , normalOffset = normalOffset
-            , result = positions ++ normals ++ faceIndices
+            , result = positions ++ normals ++ faceIndices ++ ""
             }
 
 
@@ -658,7 +663,7 @@ encodeCompactTexturedTriangles lengthToString vertices indices indexOffset indic
                             (T4 newPositions pi newPositionOffset indicesMap1) =
                                 case Dict.get p indicesMap of
                                     Nothing ->
-                                        T4 (positions ++ p) positionOffset (positionOffset + 1) (Dict.insert p positionOffset indicesMap)
+                                        T4 (positions ++ p ++ "") positionOffset (positionOffset + 1) (Dict.insert p positionOffset indicesMap)
 
                                     Just existingPositionIndex ->
                                         T4 positions existingPositionIndex positionOffset indicesMap
@@ -666,7 +671,7 @@ encodeCompactTexturedTriangles lengthToString vertices indices indexOffset indic
                             (T4 newUvs uvi newUvOffset indicesMap2) =
                                 case Dict.get uv indicesMap1 of
                                     Nothing ->
-                                        T4 (uvs ++ uv) uvOffset (uvOffset + 1) (Dict.insert uv uvOffset indicesMap1)
+                                        T4 (uvs ++ uv ++ "") uvOffset (uvOffset + 1) (Dict.insert uv uvOffset indicesMap1)
 
                                     Just existingUvIndex ->
                                         T4 uvs existingUvIndex uvOffset indicesMap1
@@ -694,7 +699,7 @@ encodeCompactTexturedTriangles lengthToString vertices indices indexOffset indic
             { indicesMap = indicesMap
             , positionOffset = positionOffset
             , uvOffset = uvOffset
-            , result = positions ++ uvs ++ faceIndices
+            , result = positions ++ uvs ++ faceIndices ++ ""
             }
 
 
@@ -747,7 +752,7 @@ encodeCompactTexturedFaces lengthToString vertices indices indexOffset indicesMa
                             (T4 newPositions pi newPositionOffset indicesMap1) =
                                 case Dict.get p indicesMap of
                                     Nothing ->
-                                        T4 (positions ++ p) positionOffset (positionOffset + 1) (Dict.insert p positionOffset indicesMap)
+                                        T4 (positions ++ p ++ "") positionOffset (positionOffset + 1) (Dict.insert p positionOffset indicesMap)
 
                                     Just existingPositionIndex ->
                                         T4 positions existingPositionIndex positionOffset indicesMap
@@ -755,7 +760,7 @@ encodeCompactTexturedFaces lengthToString vertices indices indexOffset indicesMa
                             (T4 newUvs uvi newUvOffset indicesMap2) =
                                 case Dict.get uv indicesMap1 of
                                     Nothing ->
-                                        T4 (uvs ++ uv) uvOffset (uvOffset + 1) (Dict.insert uv uvOffset indicesMap1)
+                                        T4 (uvs ++ uv ++ "") uvOffset (uvOffset + 1) (Dict.insert uv uvOffset indicesMap1)
 
                                     Just existingUvIndex ->
                                         T4 uvs existingUvIndex uvOffset indicesMap1
@@ -763,7 +768,7 @@ encodeCompactTexturedFaces lengthToString vertices indices indexOffset indicesMa
                             (T4 newNormals ni newNormalOffset indicesMap3) =
                                 case Dict.get normal indicesMap2 of
                                     Nothing ->
-                                        T4 (normals ++ normal) normalOffset (normalOffset + 1) (Dict.insert normal normalOffset indicesMap2)
+                                        T4 (normals ++ normal ++ "") normalOffset (normalOffset + 1) (Dict.insert normal normalOffset indicesMap2)
 
                                     Just existingNormalIndex ->
                                         T4 normals existingNormalIndex normalOffset indicesMap2
@@ -794,7 +799,7 @@ encodeCompactTexturedFaces lengthToString vertices indices indexOffset indicesMa
             , positionOffset = positionOffset
             , normalOffset = normalOffset
             , uvOffset = uvOffset
-            , result = positions ++ uvs ++ normals ++ faceIndices
+            , result = positions ++ uvs ++ normals ++ faceIndices ++ ""
             }
 
 
@@ -1057,7 +1062,7 @@ encodeNormals : List { a | normal : String } -> String -> String
 encodeNormals normals result =
     case normals of
         { normal } :: remainingNormals ->
-            encodeNormals remainingNormals (result ++ normal)
+            encodeNormals remainingNormals (result ++ normal ++ "")
 
         [] ->
             result
@@ -1067,7 +1072,7 @@ encodeUvs : List { a | uv : String } -> String -> String
 encodeUvs uvs result =
     case uvs of
         { uv } :: remainingUvs ->
-            encodeUvs remainingUvs (result ++ uv)
+            encodeUvs remainingUvs (result ++ uv ++ "")
 
         [] ->
             result
