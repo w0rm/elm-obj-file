@@ -28,8 +28,7 @@ import Point3d exposing (Point3d)
 import Quantity exposing (Quantity, Unitless)
 import Scene3d
 import Scene3d.Material
-import Scene3d.Mesh exposing (Uniform)
-import SketchPlane3d
+import Scene3d.Mesh exposing (Shadow, Uniform)
 import SubPath
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
@@ -48,6 +47,7 @@ type alias Model =
 
 type alias Mesh =
     { mesh : Uniform ObjCoordinates
+    , shadow : Shadow ObjCoordinates
     , boundingBox : BoundingBox3d Meters ObjCoordinates
     , triangularMesh :
         TriangularMesh
@@ -155,7 +155,7 @@ view model =
                 ++ mouseEvents model.orbiting
             )
             (case model.mesh of
-                Just { mesh, boundingBox } ->
+                Just { mesh, shadow, boundingBox } ->
                     let
                         focalPoint =
                             BoundingBox3d.centerPoint boundingBox
@@ -187,8 +187,14 @@ view model =
                         , background = Scene3d.transparentBackground
                         , clipDepth = Length.meters 0.1
                         , entities =
-                            [ Scene3d.mesh (Scene3d.Material.matte Color.red) mesh
+                            [ Scene3d.meshWithShadow (Scene3d.Material.matte Color.red) mesh shadow
                                 |> Scene3d.rotateAround (Axis3d.through focalPoint Direction3d.x) (Angle.degrees 90)
+                            , Scene3d.quad (Scene3d.Material.matte Color.lightGray)
+                                (Point3d.xyz (Quantity.negate distance) (Length.meters 0.2) distance)
+                                (Point3d.xyz distance (Length.meters 0.2) distance)
+                                (Point3d.xyz distance (Length.meters 0.2) (Quantity.negate distance))
+                                (Point3d.xyz (Quantity.negate distance) (Length.meters 0.2) (Quantity.negate distance))
+                                |> Scene3d.translateBy (Vector3d.from Point3d.origin focalPoint)
                             ]
                         }
                     , Html.button
@@ -317,28 +323,40 @@ tubes svgPath =
 
                             endCap p =
                                 let
-                                    { tangent, position } =
+                                    { tangent, position, normal } =
                                         pointOnPath p
+
+                                    flippedNormal =
+                                        if p == 0 then
+                                            Direction3d.toVector (Direction3d.reverse tangent)
+
+                                        else
+                                            Direction3d.toVector tangent
                                 in
-                                TriangularMesh.ball resolution
-                                    resolution
-                                    (\u v ->
-                                        let
-                                            sketchPlane =
-                                                SketchPlane3d.through position tangent
+                                TriangularMesh.radial
+                                    { position = position
+                                    , normal = flippedNormal
+                                    }
+                                    (List.map
+                                        (\i ->
+                                            let
+                                                u =
+                                                    if p == 0 then
+                                                        -(toFloat i / toFloat resolution)
 
-                                            theta =
-                                                Angle.radians (2 * pi * u)
+                                                    else
+                                                        toFloat i / toFloat resolution
 
-                                            phi =
-                                                Angle.radians (-pi / 2 + pi * v)
-
-                                            direction =
-                                                Direction3d.fromAzimuthInAndElevationFrom sketchPlane theta phi
-                                        in
-                                        { position = Point3d.translateIn direction radius position
-                                        , normal = Direction3d.toVector direction
-                                        }
+                                                frame =
+                                                    Frame3d.atOrigin
+                                                        |> Frame3d.translateIn normal radius
+                                                        |> Frame3d.rotateAround (Axis3d.withDirection tangent position) (Angle.turns u)
+                                            in
+                                            { position = Point3d.placeIn frame position
+                                            , normal = flippedNormal
+                                            }
+                                        )
+                                        (List.range 0 resolution)
                                     )
 
                             tube =
@@ -359,10 +377,7 @@ tubes svgPath =
                                         }
                                     )
                         in
-                        tube
-                            :: endCap 0
-                            :: endCap 1
-                            :: result
+                        tube :: endCap 0 :: endCap 1 :: result
                    )
     in
     svgPath
@@ -381,11 +396,12 @@ tubes svgPath =
                             |> List.map .position
                             |> BoundingBox3d.hullN
                             |> Maybe.withDefault (BoundingBox3d.singleton Point3d.origin)
+
+                    mesh =
+                        Scene3d.Mesh.indexedFaces triangularMesh
                 in
-                { mesh =
-                    triangularMesh
-                        |> Scene3d.Mesh.indexedFaces
-                        |> Scene3d.Mesh.cullBackFaces
+                { mesh = Scene3d.Mesh.cullBackFaces mesh
+                , shadow = Scene3d.Mesh.shadow mesh
                 , boundingBox = boundingBox
                 , triangularMesh = triangularMesh
                 }
