@@ -7,11 +7,12 @@ Now try dragging and dropping some OBJ files from <http://people.math.sc.edu/Bur
 
 -}
 
-import Angle
+import Angle exposing (Angle)
 import Array
 import BoundingBox3d exposing (BoundingBox3d)
 import Browser
-import Camera3d
+import Browser.Events
+import Camera3d exposing (Camera3d)
 import Color exposing (Color)
 import Direction3d
 import File exposing (File)
@@ -22,9 +23,9 @@ import Html.Events
 import Json.Decode
 import Length exposing (Meters)
 import Obj.Decode exposing (Decoder, ObjCoordinates)
-import Pixels
+import Pixels exposing (Pixels)
 import Point3d exposing (Point3d)
-import Quantity
+import Quantity exposing (Quantity)
 import Scene3d
 import Scene3d.Material exposing (Texture)
 import Scene3d.Mesh exposing (Textured, Uniform)
@@ -81,6 +82,10 @@ type alias Model =
     { texture : LoadState (Texture Color)
     , meshWithBoundingBox : LoadState ( ViewMesh, BoundingBox3d Meters ObjCoordinates )
     , hover : Bool
+    , azimuth : Angle
+    , elevation : Angle
+    , zoom : Float
+    , orbiting : Bool
     }
 
 
@@ -92,16 +97,43 @@ type Msg
     | LoadedTexture (Result WebGL.Texture.Error (Texture Color))
     | LoadedMesh (Result String ( ViewMesh, BoundingBox3d Meters ObjCoordinates ))
     | GotFiles File (List File)
+    | MouseDown
+    | MouseUp
+    | MouseMove (Quantity Float Pixels) (Quantity Float Pixels)
+    | MouseWheel Float
 
 
 main : Program () Model Msg
 main =
     Browser.element
-        { init = always ( Model Empty Empty False, Cmd.none )
+        { init =
+            always
+                ( { texture = Empty
+                  , meshWithBoundingBox = Empty
+                  , hover = False
+                  , azimuth = Angle.degrees -45
+                  , elevation = Angle.degrees 35
+                  , zoom = 0
+                  , orbiting = False
+                  }
+                , Cmd.none
+                )
         , update = update
         , view = view
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    if model.orbiting then
+        Sub.batch
+            [ Browser.Events.onMouseMove decodeMouseMove
+            , Browser.Events.onMouseUp (Json.Decode.succeed MouseUp)
+            ]
+
+    else
+        Browser.Events.onMouseDown (Json.Decode.succeed MouseDown)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -193,30 +225,40 @@ update msg model =
             , Cmd.none
             )
 
+        MouseDown ->
+            ( { model | orbiting = True }, Cmd.none )
 
-meshView : BoundingBox3d Meters ObjCoordinates -> LoadState (Texture Color) -> ViewMesh -> Html Msg
-meshView boundingBox loadingTexture mesh =
+        MouseUp ->
+            ( { model | orbiting = False }, Cmd.none )
+
+        MouseMove dx dy ->
+            if model.orbiting then
+                let
+                    rotationRate =
+                        Quantity.per Pixels.pixel (Angle.degrees 1)
+                in
+                ( { model
+                    | azimuth =
+                        model.azimuth
+                            |> Quantity.minus (Quantity.at rotationRate dx)
+                    , elevation =
+                        model.elevation
+                            |> Quantity.plus (Quantity.at rotationRate dy)
+                            |> Quantity.clamp (Angle.degrees -90) (Angle.degrees 90)
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
+
+        MouseWheel deltaY ->
+            ( { model | zoom = clamp 0 1 (model.zoom - deltaY * 0.002) }, Cmd.none )
+
+
+meshView : Camera3d Meters ObjCoordinates -> LoadState (Texture Color) -> ViewMesh -> Html Msg
+meshView camera loadingTexture mesh =
     let
-        { minX, maxX, minY, maxY, minZ, maxZ } =
-            BoundingBox3d.extrema boundingBox
-
-        distance =
-            List.map Quantity.abs [ minX, maxX, minY, maxY, minZ, maxZ ]
-                |> List.foldl Quantity.max Quantity.zero
-                |> Quantity.multiplyBy 4
-
-        camera =
-            Camera3d.perspective
-                { viewpoint =
-                    Viewpoint3d.orbitZ
-                        { focalPoint = BoundingBox3d.centerPoint boundingBox
-                        , azimuth = Angle.degrees -45
-                        , elevation = Angle.degrees 35
-                        , distance = distance
-                        }
-                , verticalFieldOfView = Angle.degrees 30
-                }
-
         entity =
             case mesh of
                 TexturedMesh texturedMesh ->
@@ -246,7 +288,7 @@ meshView boundingBox loadingTexture mesh =
 
 
 view : Model -> Html Msg
-view { hover, meshWithBoundingBox, texture } =
+view model =
     centeredContents
         [ Html.Attributes.style "position" "absolute"
         , Html.Attributes.style "left" "0"
@@ -257,10 +299,15 @@ view { hover, meshWithBoundingBox, texture } =
         , hijackOn "dragover" (Json.Decode.succeed DragEnter)
         , hijackOn "dragleave" (Json.Decode.succeed DragLeave)
         , hijackOn "drop" dropDecoder
+        , Html.Events.preventDefaultOn "wheel"
+            (Json.Decode.map
+                (\deltaY -> ( MouseWheel deltaY, True ))
+                (Json.Decode.field "deltaY" Json.Decode.float)
+            )
         ]
         [ centeredContents
             [ Html.Attributes.style "border"
-                (case ( hover, meshWithBoundingBox ) of
+                (case ( model.hover, model.meshWithBoundingBox ) of
                     ( True, _ ) ->
                         "3px dashed green"
 
@@ -277,7 +324,7 @@ view { hover, meshWithBoundingBox, texture } =
             , Html.Attributes.style "height" "640px"
             , Html.Attributes.style "position" "relative"
             ]
-            (case meshWithBoundingBox of
+            (case model.meshWithBoundingBox of
                 Empty ->
                     [ Html.button [ Html.Events.onClick PickClicked ]
                         [ Html.text "select an OBJ file and/or an image" ]
@@ -291,7 +338,29 @@ view { hover, meshWithBoundingBox, texture } =
                     ]
 
                 Loaded ( mesh, boundingBox ) ->
-                    [ meshView boundingBox texture mesh
+                    let
+                        { minX, maxX, minY, maxY, minZ, maxZ } =
+                            BoundingBox3d.extrema boundingBox
+
+                        distance =
+                            List.map Quantity.abs [ minX, maxX, minY, maxY, minZ, maxZ ]
+                                |> List.foldl Quantity.max Quantity.zero
+                                |> Quantity.multiplyBy 2
+                                |> Quantity.multiplyBy (2 - model.zoom)
+
+                        camera =
+                            Camera3d.perspective
+                                { viewpoint =
+                                    Viewpoint3d.orbitZ
+                                        { focalPoint = BoundingBox3d.centerPoint boundingBox
+                                        , azimuth = model.azimuth
+                                        , elevation = model.elevation
+                                        , distance = distance
+                                        }
+                                , verticalFieldOfView = Angle.degrees 30
+                                }
+                    in
+                    [ meshView camera model.texture mesh
                     , Html.button
                         [ Html.Attributes.style "position" "absolute"
                         , Html.Attributes.style "right" "10px"
@@ -326,3 +395,10 @@ hijackOn : String -> Json.Decode.Decoder msg -> Attribute msg
 hijackOn event decoder =
     Html.Events.preventDefaultOn event
         (Json.Decode.map (\val -> ( val, True )) decoder)
+
+
+decodeMouseMove : Json.Decode.Decoder Msg
+decodeMouseMove =
+    Json.Decode.map2 MouseMove
+        (Json.Decode.field "movementX" (Json.Decode.map Pixels.float Json.Decode.float))
+        (Json.Decode.field "movementY" (Json.Decode.map Pixels.float Json.Decode.float))
