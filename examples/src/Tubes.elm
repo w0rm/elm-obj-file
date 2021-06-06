@@ -290,7 +290,7 @@ tubes svgPath =
             5
 
         slope =
-            1
+            0
 
         resolution =
             8
