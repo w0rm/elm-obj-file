@@ -43,7 +43,7 @@ triangles =
             \_ ->
                 Encode.encode Length.inMeters
                     (Encode.triangles
-                        (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ])
+                        (TriangularMesh.indexed Array.empty [ ( 1, 2, 3 ) ])
                     )
                     |> Expect.equal ""
         , Test.test "skips empty indices" <|
@@ -80,7 +80,7 @@ faces =
         , Test.test "skips empty vertices" <|
             \_ ->
                 Encode.encode Length.inMeters
-                    (Encode.faces (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ]))
+                    (Encode.faces (TriangularMesh.indexed Array.empty [ ( 1, 2, 3 ) ]))
                     |> Expect.equal ""
         , Test.test "skips empty indices" <|
             \_ ->
@@ -124,7 +124,7 @@ texturedTriangles =
         , Test.test "skips empty vertices" <|
             \_ ->
                 Encode.encode Length.inMeters
-                    (Encode.texturedTriangles (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ]))
+                    (Encode.texturedTriangles (TriangularMesh.indexed Array.empty [ ( 1, 2, 3 ) ]))
                     |> Expect.equal ""
         , Test.test "skips empty indices" <|
             \_ ->
@@ -172,7 +172,7 @@ texturedFaces =
         , Test.test "skips empty vertices" <|
             \_ ->
                 Encode.encode Length.inMeters
-                    (Encode.texturedFaces (TriangularMesh.indexed (Array.fromList []) [ ( 1, 2, 3 ) ]))
+                    (Encode.texturedFaces (TriangularMesh.indexed Array.empty [ ( 1, 2, 3 ) ]))
                     |> Expect.equal ""
         , Test.test "skips empty indices" <|
             \_ ->

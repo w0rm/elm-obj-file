@@ -1402,7 +1402,7 @@ decodeHelp units decode lines lineno positions normals uvs groups object_ materi
                     [] ->
                         formatError lineno "No material name"
 
-            else if startsWith == "" || String.left 1 startsWith == "#" || List.any ((==) startsWith) skipCommands then
+            else if startsWith == "" || String.left 1 startsWith == "#" || List.member startsWith skipCommands then
                 -- Skip empty lines, comments and unsupported commands
                 decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 

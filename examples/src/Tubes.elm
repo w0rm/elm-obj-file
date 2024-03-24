@@ -10,7 +10,6 @@ import Axis3d
 import BoundingBox3d exposing (BoundingBox3d)
 import Browser
 import Camera3d
-import Circle2d exposing (boundingBox)
 import Color
 import Direction3d
 import File.Download

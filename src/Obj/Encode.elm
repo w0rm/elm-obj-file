@@ -28,7 +28,6 @@ module Obj.Encode exposing
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Length exposing (Length, Meters)
-import Obj.Decode exposing (object)
 import Point3d exposing (Point3d)
 import Polyline3d exposing (Polyline3d)
 import Quantity exposing (Unitless)
