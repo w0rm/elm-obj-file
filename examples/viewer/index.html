@@ -7854,27 +7854,6 @@ var $author$project$Obj$Decode$addNonEmptyGroup = F7(
 			}
 		}
 	});
-var $elm$core$List$any = F2(
-	function (isOkay, list) {
-		any:
-		while (true) {
-			if (!list.b) {
-				return false;
-			} else {
-				var x = list.a;
-				var xs = list.b;
-				if (isOkay(x)) {
-					return true;
-				} else {
-					var $temp$isOkay = isOkay,
-						$temp$list = xs;
-					isOkay = $temp$isOkay;
-					list = $temp$list;
-					continue any;
-				}
-			}
-		}
-	});
 var $elm$core$List$drop = F2(
 	function (n, list) {
 		drop:
@@ -7945,6 +7924,36 @@ var $elm$core$Array$length = function (_v0) {
 	var len = _v0.a;
 	return len;
 };
+var $elm$core$List$any = F2(
+	function (isOkay, list) {
+		any:
+		while (true) {
+			if (!list.b) {
+				return false;
+			} else {
+				var x = list.a;
+				var xs = list.b;
+				if (isOkay(x)) {
+					return true;
+				} else {
+					var $temp$isOkay = isOkay,
+						$temp$list = xs;
+					isOkay = $temp$isOkay;
+					list = $temp$list;
+					continue any;
+				}
+			}
+		}
+	});
+var $elm$core$List$member = F2(
+	function (x, xs) {
+		return A2(
+			$elm$core$List$any,
+			function (a) {
+				return _Utils_eq(a, x);
+			},
+			xs);
+	});
 var $author$project$Obj$Decode$parseIndices = F2(
 	function (list, vertices) {
 		parseIndices:
@@ -8583,10 +8592,7 @@ var $author$project$Obj$Decode$decodeHelp = function (units) {
 																										return A2($author$project$Obj$Decode$formatError, lineno, 'No material name');
 																									}
 																								} else {
-																									if ((startsWith === '') || ((A2($elm$core$String$left, 1, startsWith) === '#') || A2(
-																										$elm$core$List$any,
-																										$elm$core$Basics$eq(startsWith),
-																										$author$project$Obj$Decode$skipCommands))) {
+																									if ((startsWith === '') || ((A2($elm$core$String$left, 1, startsWith) === '#') || A2($elm$core$List$member, startsWith, $author$project$Obj$Decode$skipCommands))) {
 																										var $temp$units = units,
 																											$temp$decode = decode,
 																											$temp$lines = remainingLines,
