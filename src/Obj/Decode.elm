@@ -1283,139 +1283,107 @@ decodeHelp :
 decodeHelp units decode lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements =
     case lines of
         line :: remainingLines ->
-            let
-                words =
-                    String.words line
+            -- conditions are sorted based on the frequency of occurrence
+            case String.left 2 line of
+                "f " ->
+                    case parseFaceElements lineno lines faceElements of
+                        Ok ( newLineno, newLines, newFaceElements ) ->
+                            decodeHelp units decode newLines newLineno positions normals uvs groups object_ material_ groups_ newFaceElements lineElements pointsElements
 
-                startsWith =
-                    case words of
-                        firstWord :: _ ->
-                            firstWord
+                        Err err ->
+                            Err err
 
-                        _ ->
-                            ""
+                "v " ->
+                    case parsePositions units lineno lines positions of
+                        Ok ( newLineno, newLines, newPositions ) ->
+                            decodeHelp units decode newLines newLineno newPositions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
-                remainingWords =
-                    List.drop 1 words
-            in
-            -- conditions are sorted based on their frequency
-            if startsWith == "v" then
-                let
-                    ({ x } as position) =
-                        parsePosition units remainingWords
-                in
-                if isNaN x then
-                    formatError lineno "Invalid position format"
+                        Err err ->
+                            Err err
 
-                else
-                    decodeHelp units decode remainingLines (lineno + 1) (Point3d.fromMeters position :: positions) normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                "vt" ->
+                    -- we can commit to this path because no other command starts with "vt"
+                    case parseUvs lineno lines uvs of
+                        Ok ( newLineno, newLines, newUvs ) ->
+                            decodeHelp units decode newLines newLineno positions normals newUvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
-            else if startsWith == "vt" then
-                let
-                    (( u, _ ) as uv) =
-                        parseUv remainingWords
-                in
-                if isNaN u then
-                    formatError lineno "Invalid texture coordinates format"
+                        Err err ->
+                            Err err
 
-                else
-                    decodeHelp units decode remainingLines (lineno + 1) positions normals (uv :: uvs) groups object_ material_ groups_ faceElements lineElements pointsElements
+                "vn" ->
+                    -- we can commit to this path because no other command starts with "vn"
+                    case parseNormals lineno lines normals of
+                        Ok ( newLineno, newLines, newNormals ) ->
+                            decodeHelp units decode newLines newLineno positions newNormals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
-            else if startsWith == "vn" then
-                -- there is no other keyword that starts with "vn", so we assume the space after "vn "
-                let
-                    ({ x } as normal) =
-                        parseNormal remainingWords
-                in
-                if isNaN x then
-                    formatError lineno "Invalid normal vector format"
+                        Err err ->
+                            Err err
 
-                else
-                    decodeHelp units decode remainingLines (lineno + 1) positions (Direction3d.unsafe normal :: normals) uvs groups object_ material_ groups_ faceElements lineElements pointsElements
+                _ ->
+                    case String.words line of
+                        "o" :: rest ->
+                            case rest of
+                                newObject :: _ ->
+                                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) (Just newObject) material_ groups_ [] [] []
 
-            else if startsWith == "f" then
-                case parseIndices remainingWords [] of
-                    (_ :: _ :: _ :: _) as vertices ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ (FaceElement lineno vertices :: faceElements) lineElements pointsElements
+                                [] ->
+                                    formatError lineno "No object name"
 
-                    _ :: _ ->
-                        formatError lineno "Face has less than three vertices"
+                        "g" :: newGroups ->
+                            case newGroups of
+                                [] ->
+                                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ [ "default" ] [] [] []
 
-                    [] ->
-                        case remainingWords of
-                            [] ->
-                                formatError lineno "Face has less than three vertices"
+                                _ ->
+                                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ newGroups [] [] []
 
-                            _ ->
-                                formatError lineno "Invalid face format"
+                        "usemtl" :: rest ->
+                            case rest of
+                                newMaterial :: _ ->
+                                    decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ (Just newMaterial) groups_ faceElements lineElements pointsElements
 
-            else if startsWith == "l" then
-                case parseIndices remainingWords [] of
-                    (_ :: _ :: _) as vertices ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements (LineElement lineno vertices :: lineElements) pointsElements
+                                [] ->
+                                    formatError lineno "No material name"
 
-                    _ :: _ ->
-                        formatError lineno "Line has less than two vertices"
+                        "l" :: _ ->
+                            case parseLineElements lineno lines lineElements of
+                                Ok ( newLineno, newLines, newLineElements ) ->
+                                    decodeHelp units decode newLines newLineno positions normals uvs groups object_ material_ groups_ faceElements newLineElements pointsElements
 
-                    [] ->
-                        case remainingWords of
-                            [] ->
-                                formatError lineno "Line has less than two vertices"
+                                Err err ->
+                                    Err err
 
-                            _ ->
-                                formatError lineno "Invalid line format"
+                        "p" :: _ ->
+                            case parsePointsElements lineno lines pointsElements of
+                                Ok ( newLineno, newLines, newPointsElements ) ->
+                                    decodeHelp units decode newLines newLineno positions normals uvs groups object_ material_ groups_ faceElements lineElements newPointsElements
 
-            else if startsWith == "p" then
-                case parseIndices remainingWords [] of
-                    (_ :: _) as vertices ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements (PointsElement lineno vertices :: pointsElements)
+                                Err err ->
+                                    Err err
 
-                    [] ->
-                        case remainingWords of
-                            [] ->
-                                formatError lineno "Points element has no vertices"
+                        "" :: _ ->
+                            -- skip empty lines
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
-                            _ ->
-                                formatError lineno "Invalid points format"
-
-            else if startsWith == "o" then
-                case remainingWords of
-                    newObject :: _ ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) (Just newObject) material_ groups_ [] [] []
-
-                    [] ->
-                        formatError lineno "No object name"
-
-            else if startsWith == "g" then
-                case remainingWords of
-                    [] ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ [ "default" ] [] [] []
-
-                    newGroups ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ material_ newGroups [] [] []
-
-            else if startsWith == "usemtl" then
-                case remainingWords of
-                    newMaterial :: _ ->
-                        decodeHelp units decode remainingLines (lineno + 1) positions normals uvs (addNonEmptyGroup object_ material_ groups_ faceElements lineElements pointsElements groups) object_ (Just newMaterial) groups_ [] [] []
-
-                    [] ->
-                        formatError lineno "No material name"
-
-            else if startsWith == "" || String.left 1 startsWith == "#" || List.member startsWith skipCommands then
-                -- Skip empty lines, comments and unsupported commands
-                decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
-
-            else
-                formatError lineno
-                    ("Invalid OBJ syntax '"
-                        ++ (if String.length line > 20 then
-                                String.left 20 line ++ "...'"
+                        command :: _ ->
+                            if String.left 1 command == "#" || List.member command skipCommands then
+                                -- Skip unsupported commands and comments
+                                decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
                             else
-                                line ++ "'"
-                           )
-                    )
+                                formatError lineno
+                                    ("Invalid OBJ syntax '"
+                                        ++ (if String.length line > 20 then
+                                                String.left 20 line ++ "...'"
+
+                                            else
+                                                line ++ "'"
+                                           )
+                                    )
+
+                        [] ->
+                            -- This is an impossible case, because String.words always returns at least one element, for empty lines it is [""]
+                            decodeHelp units decode remainingLines (lineno + 1) positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements
 
         [] ->
             let
@@ -1499,103 +1467,224 @@ skipCommands =
     ]
 
 
-nanXyz : { x : Float, y : Float, z : Float }
-nanXyz =
-    { x = 0 / 0, y = 0 / 0, z = 0 / 0 }
+parsePositions : (Float -> Float) -> Int -> List String -> List (Point3d Meters ObjCoordinates) -> Result String ( Int, List String, List (Point3d Meters ObjCoordinates) )
+parsePositions units lineno lines positions =
+    case lines of
+        line :: remainingLines ->
+            case String.words line of
+                "v" :: coords ->
+                    -- sometimes position has more than 3 components, with the 4th component
+                    -- being the optional weight, that is only required for rational curves and surfaces
+                    -- we ignore everything after x y z for performance
+                    case coords of
+                        sx :: sy :: sz :: _ ->
+                            case String.toFloat sx of
+                                Just x ->
+                                    case String.toFloat sy of
+                                        Just y ->
+                                            case String.toFloat sz of
+                                                Just z ->
+                                                    parsePositions units
+                                                        (lineno + 1)
+                                                        remainingLines
+                                                        (Point3d.fromMeters
+                                                            { x = units x
+                                                            , y = units y
+                                                            , z = units z
+                                                            }
+                                                            :: positions
+                                                        )
 
+                                                Nothing ->
+                                                    formatError lineno "Invalid position format"
 
-nanUv : ( Float, Float )
-nanUv =
-    ( 0 / 0, 0 / 0 )
-
-
-parsePosition : (Float -> Float) -> List String -> { x : Float, y : Float, z : Float }
-parsePosition units list =
-    -- sometimes position has more than 3 components, with the 4th component
-    -- being the optional weight, that is only required for rational curves and surfaces
-    -- we ignore everything after x y z for performance
-    case list of
-        sx :: sy :: sz :: _ ->
-            case String.toFloat sx of
-                Just x ->
-                    case String.toFloat sy of
-                        Just y ->
-                            case String.toFloat sz of
-                                Just z ->
-                                    { x = units x
-                                    , y = units y
-                                    , z = units z
-                                    }
-
-                                Nothing ->
-                                    nanXyz
-
-                        Nothing ->
-                            nanXyz
-
-                Nothing ->
-                    nanXyz
-
-        _ ->
-            nanXyz
-
-
-parseUv : List String -> ( Float, Float )
-parseUv list =
-    -- sometimes uv has more than 2 components, with the 3rd component
-    -- being the optional depth of the texture
-    -- we ignore everything after u v for performance
-    case list of
-        su :: sv :: _ ->
-            case String.toFloat su of
-                Just u ->
-                    case String.toFloat sv of
-                        Just v ->
-                            ( u, v )
-
-                        Nothing ->
-                            nanUv
-
-                Nothing ->
-                    nanUv
-
-        su :: [] ->
-            -- set the default v=0 if it is missing
-            case String.toFloat su of
-                Just u ->
-                    ( u, 0 )
-
-                Nothing ->
-                    nanUv
-
-        _ ->
-            nanUv
-
-
-parseNormal : List String -> { x : Float, y : Float, z : Float }
-parseNormal list =
-    -- we ignore everything after x y z for performance
-    case list of
-        sx :: sy :: sz :: _ ->
-            case String.toFloat sx of
-                Just x ->
-                    case String.toFloat sy of
-                        Just y ->
-                            case String.toFloat sz of
-                                Just z ->
-                                    { x = x, y = y, z = z }
+                                        Nothing ->
+                                            formatError lineno "Invalid position format"
 
                                 Nothing ->
-                                    nanXyz
+                                    formatError lineno "Invalid position format"
 
-                        Nothing ->
-                            nanXyz
+                        _ ->
+                            formatError lineno "Invalid position format"
 
-                Nothing ->
-                    nanXyz
+                _ ->
+                    Ok ( lineno, lines, positions )
 
-        _ ->
-            nanXyz
+        [] ->
+            Ok ( lineno, lines, positions )
+
+
+parseUvs : Int -> List String -> List ( Float, Float ) -> Result String ( Int, List String, List ( Float, Float ) )
+parseUvs lineno lines uvs =
+    case lines of
+        line :: remainingLines ->
+            case String.words line of
+                "vt" :: coords ->
+                    case coords of
+                        -- sometimes uv has more than 2 components, with the 3rd component
+                        -- being the optional depth of the texture
+                        -- we ignore everything after u v for performance
+                        su :: sv :: _ ->
+                            case String.toFloat su of
+                                Just u ->
+                                    case String.toFloat sv of
+                                        Just v ->
+                                            parseUvs (lineno + 1) remainingLines (( u, v ) :: uvs)
+
+                                        Nothing ->
+                                            formatError lineno "Invalid texture coordinates format"
+
+                                Nothing ->
+                                    formatError lineno "Invalid texture coordinates format"
+
+                        su :: [] ->
+                            -- set the default v=0 if it is missing
+                            case String.toFloat su of
+                                Just u ->
+                                    parseUvs (lineno + 1) remainingLines (( u, 0 ) :: uvs)
+
+                                Nothing ->
+                                    formatError lineno "Invalid texture coordinates format"
+
+                        _ ->
+                            formatError lineno "Invalid texture coordinates format"
+
+                _ ->
+                    Ok ( lineno, lines, uvs )
+
+        [] ->
+            Ok ( lineno, lines, uvs )
+
+
+parseNormals : Int -> List String -> List (Direction3d ObjCoordinates) -> Result String ( Int, List String, List (Direction3d ObjCoordinates) )
+parseNormals lineno lines normals =
+    case lines of
+        line :: remainingLines ->
+            case String.words line of
+                "vn" :: coords ->
+                    case coords of
+                        -- we ignore everything after x y z for performance
+                        sx :: sy :: sz :: _ ->
+                            case String.toFloat sx of
+                                Just x ->
+                                    case String.toFloat sy of
+                                        Just y ->
+                                            case String.toFloat sz of
+                                                Just z ->
+                                                    parseNormals (lineno + 1)
+                                                        remainingLines
+                                                        (Direction3d.unsafe
+                                                            { x = x
+                                                            , y = y
+                                                            , z = z
+                                                            }
+                                                            :: normals
+                                                        )
+
+                                                Nothing ->
+                                                    formatError lineno "Invalid normal vector format"
+
+                                        Nothing ->
+                                            formatError lineno "Invalid normal vector format"
+
+                                Nothing ->
+                                    formatError lineno "Invalid normal vector format"
+
+                        _ ->
+                            formatError lineno "Invalid normal vector format"
+
+                _ ->
+                    Ok ( lineno, lines, normals )
+
+        [] ->
+            Ok ( lineno, lines, normals )
+
+
+parseFaceElements : Int -> List String -> List FaceElement -> Result String ( Int, List String, List FaceElement )
+parseFaceElements lineno lines faceElements =
+    case lines of
+        line :: remainingLines ->
+            case String.words line of
+                "f" :: indices ->
+                    case parseIndices indices [] of
+                        (_ :: _ :: _ :: _) as vertices ->
+                            parseFaceElements (lineno + 1)
+                                remainingLines
+                                (FaceElement lineno vertices :: faceElements)
+
+                        _ :: _ ->
+                            formatError lineno "Face has less than three vertices"
+
+                        [] ->
+                            case indices of
+                                [] ->
+                                    formatError lineno "Face has less than three vertices"
+
+                                _ ->
+                                    formatError lineno "Invalid face format"
+
+                _ ->
+                    Ok ( lineno, lines, faceElements )
+
+        [] ->
+            Ok ( lineno, lines, faceElements )
+
+
+parseLineElements : Int -> List String -> List LineElement -> Result String ( Int, List String, List LineElement )
+parseLineElements lineno lines lineElements =
+    case lines of
+        line :: remainingLines ->
+            case String.words line of
+                "l" :: indices ->
+                    case parseIndices indices [] of
+                        (_ :: _ :: _) as vertices ->
+                            parseLineElements (lineno + 1)
+                                remainingLines
+                                (LineElement lineno vertices :: lineElements)
+
+                        _ :: _ ->
+                            formatError lineno "Line has less than two vertices"
+
+                        [] ->
+                            case indices of
+                                [] ->
+                                    formatError lineno "Line has less than two vertices"
+
+                                _ ->
+                                    formatError lineno "Invalid line format"
+
+                _ ->
+                    Ok ( lineno, lines, lineElements )
+
+        [] ->
+            Ok ( lineno, lines, lineElements )
+
+
+parsePointsElements : Int -> List String -> List PointsElement -> Result String ( Int, List String, List PointsElement )
+parsePointsElements lineno lines pointsElements =
+    case lines of
+        line :: remainingLines ->
+            case String.words line of
+                "p" :: indices ->
+                    case parseIndices indices [] of
+                        (_ :: _) as vertices ->
+                            parsePointsElements (lineno + 1)
+                                remainingLines
+                                (PointsElement lineno vertices :: pointsElements)
+
+                        _ ->
+                            case indices of
+                                [] ->
+                                    formatError lineno "Points element has no vertices"
+
+                                _ ->
+                                    formatError lineno "Invalid points format"
+
+                _ ->
+                    Ok ( lineno, lines, pointsElements )
+
+        [] ->
+            Ok ( lineno, lines, pointsElements )
 
 
 parseIndices : List String -> List Vertex -> List Vertex
