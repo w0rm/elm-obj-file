@@ -1,4 +1,4 @@
-module DecodeBenchmark exposing (main)
+module SlowDecodeBenchmark exposing (main)
 
 import Benchmark
 import Benchmark.Runner exposing (BenchmarkProgram, program)
