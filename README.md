@@ -6,7 +6,7 @@ An Elm package to encode and decode 3D geometry in the [OBJ file format](https:/
 
 _The “Pod” model by [@01k](https://mobile.twitter.com/01k) rendered with `elm-3d-scene`. [See it live here](https://unsoundscapes.com/elm-obj-file/examples/pod/)._
 
-Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/examples/viewer/) that lets you preview OBJ files. [The Nefertiti example](https://unsoundscapes.com/elm-obj-file/examples/nefertit/) demonstrates support for loading bumpy faces with a normal map texture.
+Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/examples/viewer/) that lets you preview OBJ files. [The Nefertiti example](https://unsoundscapes.com/elm-obj-file/examples/nefertiti/) demonstrates support for loading bumpy faces with a normal map texture.
 
 The examples source code [can be found here](https://github.com/w0rm/elm-obj-file/tree/main/examples).
 
