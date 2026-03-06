@@ -12,7 +12,7 @@ jobs:
       - run: git config --global user.email "hi@unsoundscapes.com"
 
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - run: nix develop --command elm-format --validate .

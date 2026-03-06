@@ -31,7 +31,6 @@ import Length exposing (Length, Meters)
 import Point3d exposing (Point3d)
 import Polyline3d exposing (Polyline3d)
 import Quantity exposing (Unitless)
-import String
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
 
@@ -993,11 +992,12 @@ polylinesWith options lines =
 {-| -}
 pointsWith : Options -> List (Point3d Meters coords) -> Geometry
 pointsWith options pts =
-    if pts == [] then
-        Empty
+    case pts of
+        [] ->
+            Empty
 
-    else
-        Points options (List.map positionToRecord pts)
+        _ ->
+            Points options (List.map positionToRecord pts)
 
 
 positionToRecord : Point3d Meters coordinates -> { px : Length, py : Length, pz : Length }
