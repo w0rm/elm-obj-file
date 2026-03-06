@@ -7684,8 +7684,8 @@ var $elm$core$List$filterMap = F2(
 	});
 var $elm$browser$Browser$Events$onSelfMsg = F3(
 	function (router, _v0, state) {
-		var key = _v0.dH;
 		var event = _v0.du;
+		var key = _v0.dH;
 		var toMessage = function (_v2) {
 			var subKey = _v2.a;
 			var _v3 = _v2.b;
@@ -8943,11 +8943,11 @@ var $elm_explorations$webgl$WebGL$Texture$SizeError = F2(
 	});
 var $elm_explorations$webgl$WebGL$Texture$loadWith = F2(
 	function (_v0, url) {
-		var magnify = _v0.b1;
-		var minify = _v0.b3;
-		var horizontalWrap = _v0.bX;
-		var verticalWrap = _v0.ci;
 		var flipY = _v0.bU;
+		var verticalWrap = _v0.ci;
+		var horizontalWrap = _v0.bX;
+		var minify = _v0.b3;
+		var magnify = _v0.b1;
 		var expand = F4(
 			function (_v1, _v2, _v3, _v4) {
 				var mag = _v1;
@@ -9179,8 +9179,8 @@ var $author$project$Obj$Decode$addFaces = function (vertexData) {
 										addFaces:
 										while (true) {
 											if (elementVertices.b) {
-												var p = elementVertices.a.X;
 												var n = elementVertices.a.ax;
+												var p = elementVertices.a.X;
 												var remainingVertices = elementVertices.b;
 												if (_Utils_cmp(n, -1) > 0) {
 													var lookupArray = A2(
@@ -9357,9 +9357,9 @@ var $author$project$Obj$Decode$triangularMesh = F5(
 	function (add, filters, groups, currentIndexedState, faceIndices) {
 		triangularMesh:
 		while (true) {
-			var maxIndex = currentIndexedState.aJ;
-			var indexMap = currentIndexedState.N;
 			var vertices = currentIndexedState.aO;
+			var indexMap = currentIndexedState.N;
+			var maxIndex = currentIndexedState.aJ;
 			if (groups.b) {
 				if (groups.a.b.b) {
 					var _v1 = groups.a;
@@ -9461,8 +9461,8 @@ var $ianmackenzie$elm_geometry_linear_algebra_interop$Geometry$Interop$LinearAlg
 };
 var $ianmackenzie$elm_3d_scene$Scene3d$Mesh$collectSmooth = F2(
 	function (_v0, accumulated) {
-		var position = _v0.a5;
 		var normal = _v0.b4;
+		var position = _v0.a5;
 		return A2(
 			$elm$core$List$cons,
 			{
@@ -9905,9 +9905,9 @@ var $author$project$Obj$Decode$addTexturedFaces = function (vertexData) {
 										addTexturedFaces:
 										while (true) {
 											if (elementVertices.b) {
-												var p = elementVertices.a.X;
-												var uv = elementVertices.a.Z;
 												var n = elementVertices.a.ax;
+												var uv = elementVertices.a.Z;
+												var p = elementVertices.a.X;
 												var remainingVertices = elementVertices.b;
 												if ((_Utils_cmp(uv, -1) > 0) && (_Utils_cmp(n, -1) > 0)) {
 													var lookupArray = A2(
@@ -10073,9 +10073,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Types$MeshWithNormalsAndUvs = F4(
 var $elm_explorations$linear_algebra$Math$Vector2$vec2 = _MJS_v2;
 var $ianmackenzie$elm_3d_scene$Scene3d$Mesh$collectSmoothTextured = F2(
 	function (_v0, accumulated) {
-		var position = _v0.a5;
-		var normal = _v0.b4;
 		var uv = _v0.Z;
+		var normal = _v0.b4;
+		var position = _v0.a5;
 		var _v1 = uv;
 		var u = _v1.a;
 		var v = _v1.b;
@@ -10169,8 +10169,8 @@ var $author$project$Obj$Decode$addTexturedTriangles = function (vertexData) {
 										addTexturedTriangles:
 										while (true) {
 											if (elementVertices.b) {
-												var p = elementVertices.a.X;
 												var uv = elementVertices.a.Z;
+												var p = elementVertices.a.X;
 												var remainingVertices = elementVertices.b;
 												if (_Utils_cmp(uv, -1) > 0) {
 													var lookupArray = A2(
@@ -10470,9 +10470,9 @@ var $ianmackenzie$elm_geometry$BoundingBox3d$hullHelp = F7(
 				var next = points.a;
 				var rest = points.b;
 				var _v1 = next;
-				var x = _v1.eF;
-				var y = _v1.eG;
 				var z = _v1.eI;
+				var y = _v1.eG;
+				var x = _v1.eF;
 				var $temp$currentMinX = A2($elm$core$Basics$min, x, currentMinX),
 					$temp$currentMaxX = A2($elm$core$Basics$max, x, currentMaxX),
 					$temp$currentMinY = A2($elm$core$Basics$min, y, currentMinY),
@@ -10496,9 +10496,9 @@ var $ianmackenzie$elm_geometry$BoundingBox3d$hullHelp = F7(
 var $ianmackenzie$elm_geometry$BoundingBox3d$hull = F2(
 	function (first, rest) {
 		var _v0 = first;
-		var x = _v0.eF;
-		var y = _v0.eG;
 		var z = _v0.eI;
+		var y = _v0.eG;
+		var x = _v0.eF;
 		return A7($ianmackenzie$elm_geometry$BoundingBox3d$hullHelp, x, x, y, y, z, z, rest);
 	});
 var $elm$core$Result$map = F2(
@@ -10957,9 +10957,9 @@ var $avh4$elm_color$Color$toRgba = function (_v0) {
 var $elm_explorations$linear_algebra$Math$Vector3$vec3 = _MJS_v3;
 var $ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$colorToLinearRgb = function (color) {
 	var _v0 = $avh4$elm_color$Color$toRgba(color);
-	var red = _v0.c1;
-	var green = _v0.cw;
 	var blue = _v0.co;
+	var green = _v0.cw;
+	var red = _v0.c1;
 	return A3(
 		$elm_explorations$linear_algebra$Math$Vector3$vec3,
 		$ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$inverseGamma(red),
@@ -12267,8 +12267,8 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Types$CieXyz = F3(
 var $ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$chromaticityToCieXyz = F2(
 	function (_v0, _v1) {
 		var intensity = _v0;
-		var x = _v1.eF;
 		var y = _v1.eG;
+		var x = _v1.eF;
 		return A3($ianmackenzie$elm_3d_scene$Scene3d$Types$CieXyz, (intensity * x) / y, intensity, (intensity * ((1 - x) - y)) / y);
 	});
 var $ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$cieXyzToLinearRgb = function (_v0) {
@@ -12383,9 +12383,9 @@ var $elm_explorations$webgl$WebGL$Internal$DepthTest = F4(
 		return {$: 1, a: a, b: b, c: c, d: d};
 	});
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$greaterOrEqual = function (_v0) {
-	var write = _v0.ak;
-	var near = _v0.ag;
 	var far = _v0.af;
+	var near = _v0.ag;
+	var write = _v0.ak;
 	return A4($elm_explorations$webgl$WebGL$Internal$DepthTest, 518, write, near, far);
 };
 var $elm_explorations$webgl$WebGL$Internal$PolygonOffset = F2(
@@ -12463,9 +12463,9 @@ var $elm_explorations$webgl$WebGL$Internal$StencilTest = function (a) {
 };
 var $elm_explorations$webgl$WebGL$Settings$StencilTest$testSeparate = F3(
 	function (_v0, options1, options2) {
-		var ref = _v0.c2;
-		var mask = _v0.cI;
 		var writeMask = _v0.dg;
+		var mask = _v0.cI;
+		var ref = _v0.c2;
 		var expandTest = F2(
 			function (_v2, fn) {
 				var expandedTest = _v2;
@@ -12558,9 +12558,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$createShadows = F2(
 				shadowCasters));
 	});
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$less = function (_v0) {
-	var write = _v0.ak;
-	var near = _v0.ag;
 	var far = _v0.af;
+	var near = _v0.ag;
+	var write = _v0.ak;
 	return A4($elm_explorations$webgl$WebGL$Internal$DepthTest, 513, write, near, far);
 };
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$default = $elm_explorations$webgl$WebGL$Settings$DepthTest$less(
@@ -12587,12 +12587,12 @@ var $elm_explorations$webgl$WebGL$Internal$Blend = function (a) {
 	};
 };
 var $elm_explorations$webgl$WebGL$Settings$Blend$custom = function (_v0) {
-	var r = _v0.cb;
-	var g = _v0.bV;
-	var b = _v0.bN;
-	var a = _v0.bL;
-	var color = _v0.bQ;
 	var alpha = _v0.aQ;
+	var color = _v0.bQ;
+	var a = _v0.bL;
+	var b = _v0.bN;
+	var g = _v0.bV;
+	var r = _v0.cb;
 	var expand = F2(
 		function (_v1, _v2) {
 			var eq1 = _v1.a;
@@ -12972,9 +12972,9 @@ var $ianmackenzie$elm_units$Quantity$negate = function (_v0) {
 };
 var $elm_explorations$webgl$WebGL$Settings$StencilTest$equal = 514;
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$lessOrEqual = function (_v0) {
-	var write = _v0.ak;
-	var near = _v0.ag;
 	var far = _v0.af;
+	var near = _v0.ag;
+	var write = _v0.ak;
 	return A4($elm_explorations$webgl$WebGL$Internal$DepthTest, 515, write, near, far);
 };
 var $ianmackenzie$elm_3d_scene$Scene3d$upperFourBits = 240;
@@ -12990,9 +12990,9 @@ var $elm$core$Basics$isInfinite = _Basics_isInfinite;
 var $ianmackenzie$elm_3d_camera$WebGL$Matrices$projectionMatrix = F2(
 	function (_v0, _v1) {
 		var camera = _v0;
-		var nearClipDepth = _v1.fs;
-		var farClipDepth = _v1.e5;
 		var aspectRatio = _v1.eL;
+		var farClipDepth = _v1.e5;
+		var nearClipDepth = _v1.fs;
 		var _v2 = $ianmackenzie$elm_units$Quantity$abs(nearClipDepth);
 		var n = _v2;
 		var _v3 = $ianmackenzie$elm_units$Quantity$abs(farClipDepth);
@@ -13374,9 +13374,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Light$directional = F2(
 	function (_v0, light) {
 		var shadowFlag = _v0;
 		var _v1 = $ianmackenzie$elm_geometry$Direction3d$unwrap(light.ct);
-		var x = _v1.eF;
-		var y = _v1.eG;
 		var z = _v1.eI;
+		var y = _v1.eG;
+		var x = _v1.eF;
 		var _v2 = A2($ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$chromaticityToLinearRgb, light.cx, light.bP);
 		var rgb = _v2;
 		return {
@@ -13443,9 +13443,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Light$soft = function (light) {
 				var nitsAbove = $elm$core$Basics$abs(
 					$ianmackenzie$elm_units$Illuminance$inLux(light.fe) / $elm$core$Basics$pi);
 				var _v0 = $ianmackenzie$elm_geometry$Direction3d$unwrap(light.fP);
-				var x = _v0.eF;
-				var y = _v0.eG;
 				var z = _v0.eI;
+				var y = _v0.eG;
+				var x = _v0.eF;
 				var _v1 = A2(
 					$ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$chromaticityToLinearRgb,
 					$ianmackenzie$elm_units$Quantity$float(1),
@@ -13904,10 +13904,10 @@ var $ianmackenzie$elm_geometry$SketchPlane3d$unsafe = $elm$core$Basics$identity;
 var $ianmackenzie$elm_geometry$SketchPlane3d$xy = $ianmackenzie$elm_geometry$SketchPlane3d$unsafe(
 	{cR: $ianmackenzie$elm_geometry$Point3d$origin, fY: $ianmackenzie$elm_geometry$Direction3d$x, dh: $ianmackenzie$elm_geometry$Direction3d$y});
 var $ianmackenzie$elm_3d_camera$Viewpoint3d$orbitZ = function (_v0) {
-	var focalPoint = _v0.e6;
-	var azimuth = _v0.aS;
-	var elevation = _v0.aT;
 	var distance = _v0.eZ;
+	var elevation = _v0.aT;
+	var azimuth = _v0.aS;
+	var focalPoint = _v0.e6;
 	return $ianmackenzie$elm_3d_camera$Viewpoint3d$orbit(
 		{aS: azimuth, eZ: distance, aT: elevation, e6: focalPoint, bW: $ianmackenzie$elm_geometry$SketchPlane3d$xy});
 };
@@ -14042,12 +14042,12 @@ var $author$project$Viewer$view = function (model) {
 							var mesh = _v2.a;
 							var boundingBox = _v2.b;
 							var _v3 = $ianmackenzie$elm_geometry$BoundingBox3d$extrema(boundingBox);
-							var minX = _v3.fo;
-							var maxX = _v3.fk;
-							var minY = _v3.fp;
-							var maxY = _v3.fl;
-							var minZ = _v3.fq;
 							var maxZ = _v3.fm;
+							var minZ = _v3.fq;
+							var maxY = _v3.fl;
+							var minY = _v3.fp;
+							var maxX = _v3.fk;
+							var minX = _v3.fo;
 							var distance = A2(
 								$ianmackenzie$elm_units$Quantity$multiplyBy,
 								2 - model.bJ,

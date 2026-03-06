@@ -7586,9 +7586,9 @@ var $ianmackenzie$elm_units$Quantity$ratio = F2(
 	});
 var $ianmackenzie$elm_geometry$ArcLengthParameterization$segmentsPerLeaf = 8;
 var $ianmackenzie$elm_geometry$ArcLengthParameterization$build = function (_v0) {
-	var maxError = _v0.fv;
-	var derivativeMagnitude = _v0.e8;
 	var maxSecondDerivativeMagnitude = _v0.fw;
+	var derivativeMagnitude = _v0.e8;
+	var maxError = _v0.fv;
 	var height = function () {
 		if (A2($ianmackenzie$elm_units$Quantity$lessThanOrEqualTo, $ianmackenzie$elm_units$Quantity$zero, maxError)) {
 			return 0;
@@ -8849,9 +8849,9 @@ var $ianmackenzie$elm_geometry$Vector2d$toTuple = F2(
 				$ianmackenzie$elm_geometry$Vector2d$yComponent(vector)));
 	});
 var $folkertdev$one_true_path_experiment$Geometry$Ellipse$coordinatePrime = function (_v0) {
-	var start = _v0.df;
-	var end = _v0.dA;
 	var xAxisRotate = _v0.av;
+	var end = _v0.dA;
+	var start = _v0.df;
 	var rotate = $folkertdev$one_true_path_experiment$Geometry$Ellipse$inverseConversionMatrix(xAxisRotate);
 	return A2(
 		$ianmackenzie$elm_geometry$Vector2d$toTuple,
@@ -8930,12 +8930,12 @@ var $folkertdev$one_true_path_experiment$Geometry$Ellipse$signedAngle = F2(
 	});
 var $folkertdev$one_true_path_experiment$Geometry$Ellipse$tau = 2 * $elm$core$Basics$pi;
 var $folkertdev$one_true_path_experiment$Geometry$Ellipse$endpointToCenter = function (parameterization) {
-	var start = parameterization.df;
-	var end = parameterization.dA;
-	var radii = parameterization.aG;
-	var xAxisRotate = parameterization.av;
-	var arcFlag = parameterization.cn;
 	var direction = parameterization.cy;
+	var arcFlag = parameterization.cn;
+	var xAxisRotate = parameterization.av;
+	var radii = parameterization.aG;
+	var end = parameterization.dA;
+	var start = parameterization.df;
 	var sign = function (_v7) {
 		var a = _v7.a;
 		var b = _v7.b;
@@ -9097,11 +9097,11 @@ var $ianmackenzie$elm_geometry$EllipticalArc2d$with = function (properties) {
 };
 var $folkertdev$one_true_path_experiment$Segment$ellipticalArc = F2(
 	function (start, _v0) {
-		var radii = _v0.aG;
-		var xAxisRotate = _v0.av;
-		var arcFlag = _v0.cn;
-		var direction = _v0.cy;
 		var target = _v0.an;
+		var direction = _v0.cy;
+		var arcFlag = _v0.cn;
+		var xAxisRotate = _v0.av;
+		var radii = _v0.aG;
 		var center = $folkertdev$one_true_path_experiment$Geometry$Ellipse$endpointToCenter(
 			{cn: arcFlag, cy: direction, dA: target, aG: radii, df: start, av: xAxisRotate});
 		var _v1 = radii;
@@ -9261,8 +9261,8 @@ var $folkertdev$one_true_path_experiment$SubPath$toSegments = function (subpath)
 	if (subpath.$ === 1) {
 		return _List_Nil;
 	} else {
-		var moveto = subpath.a.ej;
 		var drawtos = subpath.a.dy;
+		var moveto = subpath.a.ej;
 		var coordinate = moveto;
 		var folder = F2(
 			function (drawto, _v2) {
@@ -9635,9 +9635,9 @@ var $ianmackenzie$elm_geometry$BoundingBox3d$hullHelp = F7(
 				var next = points.a;
 				var rest = points.b;
 				var _v1 = next;
-				var x = _v1.eS;
-				var y = _v1.eT;
 				var z = _v1.eV;
+				var y = _v1.eT;
+				var x = _v1.eS;
 				var $temp$currentMinX = A2($elm$core$Basics$min, x, currentMinX),
 					$temp$currentMaxX = A2($elm$core$Basics$max, x, currentMaxX),
 					$temp$currentMinY = A2($elm$core$Basics$min, y, currentMinY),
@@ -9661,9 +9661,9 @@ var $ianmackenzie$elm_geometry$BoundingBox3d$hullHelp = F7(
 var $ianmackenzie$elm_geometry$BoundingBox3d$hull = F2(
 	function (first, rest) {
 		var _v0 = first;
-		var x = _v0.eS;
-		var y = _v0.eT;
 		var z = _v0.eV;
+		var y = _v0.eT;
+		var x = _v0.eS;
 		return A7($ianmackenzie$elm_geometry$BoundingBox3d$hullHelp, x, x, y, y, z, z, rest);
 	});
 var $ianmackenzie$elm_geometry$BoundingBox3d$hullN = function (points) {
@@ -9697,8 +9697,8 @@ var $ianmackenzie$elm_geometry_linear_algebra_interop$Geometry$Interop$LinearAlg
 };
 var $ianmackenzie$elm_3d_scene$Scene3d$Mesh$collectSmooth = F2(
 	function (_v0, accumulated) {
-		var position = _v0.a8;
 		var normal = _v0.b5;
+		var position = _v0.a8;
 		return A2(
 			$elm$core$List$cons,
 			{
@@ -10140,8 +10140,8 @@ var $folkertdev$one_true_path_experiment$LowLevel$Command$toAbsoluteFloat3 = F3(
 	});
 var $folkertdev$one_true_path_experiment$LowLevel$Command$fromLowLevelDrawTo = F2(
 	function (drawto, state) {
-		var start = state.df;
 		var cursor = state.n;
+		var start = state.df;
 		switch (drawto.$) {
 			case 0:
 				var mode = drawto.a;
@@ -10381,10 +10381,10 @@ var $folkertdev$one_true_path_experiment$SubPath$SubPath = function (a) {
 };
 var $folkertdev$elm_deque$Deque$Deque = $elm$core$Basics$identity;
 var $folkertdev$elm_deque$Internal$rebalance = function (deque) {
-	var sizeF = deque.P;
-	var sizeR = deque.Q;
-	var front = deque.V;
 	var rear = deque.ab;
+	var front = deque.V;
+	var sizeR = deque.Q;
+	var sizeF = deque.P;
 	var size1 = ((sizeF + sizeR) / 2) | 0;
 	var size2 = (sizeF + sizeR) - size1;
 	var balanceConstant = 4;
@@ -10440,8 +10440,8 @@ var $folkertdev$one_true_path_experiment$Path$fromLowLevel = function (lowlevels
 		var initialCursorState = {n: target, H: $elm$core$Maybe$Nothing, df: target};
 		var folder = F2(
 			function (_v4, _v5) {
-				var moveto = _v4.ej;
 				var drawtos = _v4.dy;
+				var moveto = _v4.ej;
 				var state = _v5.a;
 				var accum = _v5.b;
 				var _v2 = A2($folkertdev$one_true_path_experiment$LowLevel$Command$fromLowLevelMoveTo, moveto, state);
@@ -10897,8 +10897,8 @@ var $folkertdev$svg_path_lowlevel$Path$LowLevel$ParserHelpers$delimitedEndForbid
 				]));
 	});
 var $folkertdev$svg_path_lowlevel$Path$LowLevel$ParserHelpers$delimited = function (_v0) {
-	var delimiter = _v0.e7;
 	var item = _v0.dO;
+	var delimiter = _v0.e7;
 	return $elm$parser$Parser$oneOf(
 		_List_fromArray(
 			[
@@ -10991,9 +10991,9 @@ var $elm$core$Char$toUpper = _Char_toUpper;
 var $folkertdev$svg_path_lowlevel$Parser$Future$ZeroOrMore = 0;
 var $folkertdev$svg_path_lowlevel$Parser$Future$zeroOrMore = 0;
 var $folkertdev$svg_path_lowlevel$Path$LowLevel$ParserInternal$command = function (_v0) {
-	var constructor = _v0.ai;
-	var character = _v0.ah;
 	var _arguments = _v0.ag;
+	var character = _v0.ah;
+	var constructor = _v0.ai;
 	return $elm$parser$Parser$oneOf(
 		_List_fromArray(
 			[
@@ -11670,8 +11670,8 @@ var $folkertdev$one_true_path_experiment$SubPath$fold = F3(
 				case 2:
 					return $elm$core$Maybe$Nothing;
 				case 1:
-					var segment = parameterized.a.cg;
 					var tolerance = parameterized.a.bb;
+					var segment = parameterized.a.cg;
 					var totalLength = $folkertdev$one_true_path_experiment$Segment$arcLength(segment);
 					var answer = A2(
 						tagger,
@@ -11679,11 +11679,11 @@ var $folkertdev$one_true_path_experiment$SubPath$fold = F3(
 						A3(clamp, totalLength, tolerance, t));
 					return $elm$core$Maybe$Just(answer);
 				default:
-					var totalLength = parameterized.a.cj;
-					var lengthAtSplit = parameterized.a.cM;
-					var left = parameterized.a.cD;
-					var right = parameterized.a.c9;
 					var tolerance = parameterized.a.bb;
+					var right = parameterized.a.c9;
+					var left = parameterized.a.cD;
+					var lengthAtSplit = parameterized.a.cM;
+					var totalLength = parameterized.a.cj;
 					var clamped = A3(clamp, totalLength, tolerance, t);
 					if (_Utils_cmp(clamped, lengthAtSplit) < 1) {
 						var $temp$tagger = tagger,
@@ -11740,24 +11740,24 @@ var $ianmackenzie$elm_geometry$ArcLengthParameterization$unsafeToParameterValue 
 		unsafeToParameterValue:
 		while (true) {
 			if (tree.$ === 1) {
-				var length0 = tree.a.bZ;
-				var length1 = tree.a.cF;
-				var length2 = tree.a.cG;
-				var length3 = tree.a.cH;
-				var length4 = tree.a.cI;
-				var length5 = tree.a.cJ;
-				var length6 = tree.a.cK;
-				var length7 = tree.a.cL;
-				var length8 = tree.a.b_;
-				var param0 = tree.a.ca;
-				var param1 = tree.a.cX;
-				var param2 = tree.a.cY;
-				var param3 = tree.a.cZ;
-				var param4 = tree.a.c_;
-				var param5 = tree.a.c$;
-				var param6 = tree.a.c0;
-				var param7 = tree.a.c1;
 				var param8 = tree.a.c2;
+				var param7 = tree.a.c1;
+				var param6 = tree.a.c0;
+				var param5 = tree.a.c$;
+				var param4 = tree.a.c_;
+				var param3 = tree.a.cZ;
+				var param2 = tree.a.cY;
+				var param1 = tree.a.cX;
+				var param0 = tree.a.ca;
+				var length8 = tree.a.b_;
+				var length7 = tree.a.cL;
+				var length6 = tree.a.cK;
+				var length5 = tree.a.cJ;
+				var length4 = tree.a.cI;
+				var length3 = tree.a.cH;
+				var length2 = tree.a.cG;
+				var length1 = tree.a.cF;
+				var length0 = tree.a.bZ;
 				if (_Utils_cmp(s, length4) < 1) {
 					if (_Utils_cmp(s, length2) < 1) {
 						if (_Utils_cmp(s, length1) < 1) {
@@ -11796,8 +11796,8 @@ var $ianmackenzie$elm_geometry$ArcLengthParameterization$unsafeToParameterValue 
 					}
 				}
 			} else {
-				var leftBranch = tree.a.cE;
 				var rightBranch = tree.a.da;
+				var leftBranch = tree.a.cE;
 				if (_Utils_cmp(
 					s,
 					$ianmackenzie$elm_geometry$ArcLengthParameterization$lengthAtStart(rightBranch)) < 0) {
@@ -12991,8 +12991,8 @@ var $folkertdev$one_true_path_experiment$SubPath$traverse = F3(
 				case 2:
 					return $elm$core$Maybe$Nothing;
 				case 1:
-					var segment = parameterized.a.cg;
 					var tolerance = parameterized.a.bb;
+					var segment = parameterized.a.cg;
 					var totalLength = $folkertdev$one_true_path_experiment$Segment$arcLength(segment);
 					var answer = A2(
 						tagger,
@@ -13000,11 +13000,11 @@ var $folkertdev$one_true_path_experiment$SubPath$traverse = F3(
 						A3(clamp, totalLength, tolerance, t));
 					return answer;
 				default:
-					var totalLength = parameterized.a.cj;
-					var lengthAtSplit = parameterized.a.cM;
-					var left = parameterized.a.cD;
-					var right = parameterized.a.c9;
 					var tolerance = parameterized.a.bb;
+					var right = parameterized.a.c9;
+					var left = parameterized.a.cD;
+					var lengthAtSplit = parameterized.a.cM;
+					var totalLength = parameterized.a.cj;
 					var clamped = A3(clamp, totalLength, tolerance, t);
 					if (_Utils_cmp(clamped, lengthAtSplit) < 1) {
 						var $temp$tagger = tagger,
@@ -13195,9 +13195,9 @@ var $author$project$Tubes$tubes = function (svgPath) {
 					F2(
 						function (u, v) {
 							var _v1 = pointOnPath(u);
-							var tangent = _v1.dh;
-							var position = _v1.a8;
 							var normal = _v1.b5;
+							var position = _v1.a8;
+							var tangent = _v1.dh;
 							var frame = A3(
 								$ianmackenzie$elm_geometry$Frame3d$rotateAround,
 								A2($ianmackenzie$elm_geometry$Axis3d$withDirection, tangent, position),
@@ -13211,9 +13211,9 @@ var $author$project$Tubes$tubes = function (svgPath) {
 						}));
 				var endCap = function (p) {
 					var _v0 = pointOnPath(p);
-					var tangent = _v0.dh;
-					var position = _v0.a8;
 					var normal = _v0.b5;
+					var position = _v0.a8;
+					var tangent = _v0.dh;
 					var flippedNormal = (!p) ? $ianmackenzie$elm_geometry$Direction3d$toVector(
 						$ianmackenzie$elm_geometry$Direction3d$reverse(tangent)) : $ianmackenzie$elm_geometry$Direction3d$toVector(tangent);
 					return A2(
@@ -13415,9 +13415,9 @@ var $author$project$Obj$Encode$safeString = function (string) {
 				A3($elm$core$String$replace, ' ', '', string))));
 };
 var $author$project$Obj$Encode$encodeOptions = function (_v0) {
-	var groups = _v0.bq;
-	var object = _v0.bx;
 	var material = _v0.bv;
+	var object = _v0.bx;
+	var groups = _v0.bq;
 	return $elm$core$String$concat(
 		_List_fromArray(
 			[
@@ -13475,9 +13475,9 @@ var $author$project$Obj$Encode$encodePolylines = F6(
 		encodePolylines:
 		while (true) {
 			if (positions.b) {
-				var px = positions.a.Z;
-				var py = positions.a._;
 				var pz = positions.a.aa;
+				var py = positions.a._;
+				var px = positions.a.Z;
 				var remainingPositions = positions.b;
 				var $temp$lengthToString = lengthToString,
 					$temp$lines = lines,
@@ -13541,9 +13541,9 @@ var $author$project$Obj$Encode$encodePositions = F3(
 		encodePositions:
 		while (true) {
 			if (positions.b) {
-				var px = positions.a.Z;
-				var py = positions.a._;
 				var pz = positions.a.aa;
+				var py = positions.a._;
+				var px = positions.a.Z;
 				var remainingPositions = positions.b;
 				var $temp$lengthToString = lengthToString,
 					$temp$positions = remainingPositions,
@@ -13872,8 +13872,8 @@ var $author$project$Obj$Encode$facesWith = F2(
 		var vertices = $ianmackenzie$elm_triangular_mesh$TriangularMesh$vertices(mesh);
 		var encodeNumber = $author$project$Obj$Encode$encodeFloat(options.E);
 		var vertexToRecord = function (_v1) {
-			var position = _v1.a8;
 			var normal = _v1.b5;
+			var position = _v1.a8;
 			return {
 				b5: 'vn ' + (encodeNumber(
 					$ianmackenzie$elm_units$Quantity$toFloat(
@@ -14130,9 +14130,9 @@ var $avh4$elm_color$Color$toRgba = function (_v0) {
 };
 var $ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$colorToLinearRgb = function (color) {
 	var _v0 = $avh4$elm_color$Color$toRgba(color);
-	var red = _v0.c6;
-	var green = _v0.cB;
 	var blue = _v0.cs;
+	var green = _v0.cB;
+	var red = _v0.c6;
 	return A3(
 		$elm_explorations$linear_algebra$Math$Vector3$vec3,
 		$ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$inverseGamma(red),
@@ -15352,9 +15352,9 @@ var $elm_explorations$webgl$WebGL$Internal$StencilTest = function (a) {
 };
 var $elm_explorations$webgl$WebGL$Settings$StencilTest$testSeparate = F3(
 	function (_v0, options1, options2) {
-		var ref = _v0.c7;
-		var mask = _v0.cN;
 		var writeMask = _v0.$7;
+		var mask = _v0.cN;
+		var ref = _v0.c7;
 		var expandTest = F2(
 			function (_v2, fn) {
 				var expandedTest = _v2;
@@ -15645,10 +15645,10 @@ var $ianmackenzie$elm_geometry$SketchPlane3d$unsafe = $elm$core$Basics$identity;
 var $ianmackenzie$elm_geometry$SketchPlane3d$xy = $ianmackenzie$elm_geometry$SketchPlane3d$unsafe(
 	{cW: $ianmackenzie$elm_geometry$Point3d$origin, f3: $ianmackenzie$elm_geometry$Direction3d$x, dp: $ianmackenzie$elm_geometry$Direction3d$y});
 var $ianmackenzie$elm_3d_camera$Viewpoint3d$orbitZ = function (_v0) {
-	var focalPoint = _v0.fj;
-	var azimuth = _v0.aX;
-	var elevation = _v0.aY;
 	var distance = _v0.fa;
+	var elevation = _v0.aY;
+	var azimuth = _v0.aX;
+	var focalPoint = _v0.fj;
 	return $ianmackenzie$elm_3d_camera$Viewpoint3d$orbit(
 		{aX: azimuth, fa: distance, aY: elevation, fj: focalPoint, bX: $ianmackenzie$elm_geometry$SketchPlane3d$xy});
 };
@@ -16284,8 +16284,8 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Types$CieXyz = F3(
 var $ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$chromaticityToCieXyz = F2(
 	function (_v0, _v1) {
 		var intensity = _v0;
-		var x = _v1.eS;
 		var y = _v1.eT;
+		var x = _v1.eS;
 		return A3($ianmackenzie$elm_3d_scene$Scene3d$Types$CieXyz, (intensity * x) / y, intensity, (intensity * ((1 - x) - y)) / y);
 	});
 var $ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$cieXyzToLinearRgb = function (_v0) {
@@ -16380,9 +16380,9 @@ var $elm_explorations$webgl$WebGL$Internal$DepthTest = F4(
 		return {$: 1, a: a, b: b, c: c, d: d};
 	});
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$greaterOrEqual = function (_v0) {
-	var write = _v0.ao;
-	var near = _v0.ak;
 	var far = _v0.aj;
+	var near = _v0.ak;
+	var write = _v0.ao;
 	return A4($elm_explorations$webgl$WebGL$Internal$DepthTest, 518, write, near, far);
 };
 var $elm_explorations$webgl$WebGL$Internal$PolygonOffset = F2(
@@ -16489,9 +16489,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$createShadows = F2(
 				shadowCasters));
 	});
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$less = function (_v0) {
-	var write = _v0.ao;
-	var near = _v0.ak;
 	var far = _v0.aj;
+	var near = _v0.ak;
+	var write = _v0.ao;
 	return A4($elm_explorations$webgl$WebGL$Internal$DepthTest, 513, write, near, far);
 };
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$default = $elm_explorations$webgl$WebGL$Settings$DepthTest$less(
@@ -16518,12 +16518,12 @@ var $elm_explorations$webgl$WebGL$Internal$Blend = function (a) {
 	};
 };
 var $elm_explorations$webgl$WebGL$Settings$Blend$custom = function (_v0) {
-	var r = _v0.cd;
-	var g = _v0.bW;
-	var b = _v0.bP;
-	var a = _v0.bN;
-	var color = _v0.bR;
 	var alpha = _v0.aV;
+	var color = _v0.bR;
+	var a = _v0.bN;
+	var b = _v0.bP;
+	var g = _v0.bW;
+	var r = _v0.cd;
 	var expand = F2(
 		function (_v1, _v2) {
 			var eq1 = _v1.a;
@@ -16846,9 +16846,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$lightingDisabled = _Utils_Tuple2(
 	A4($elm_explorations$linear_algebra$Math$Vector4$vec4, 0, 0, 0, 0));
 var $elm_explorations$webgl$WebGL$Settings$StencilTest$equal = 514;
 var $elm_explorations$webgl$WebGL$Settings$DepthTest$lessOrEqual = function (_v0) {
-	var write = _v0.ao;
-	var near = _v0.ak;
 	var far = _v0.aj;
+	var near = _v0.ak;
+	var write = _v0.ao;
 	return A4($elm_explorations$webgl$WebGL$Internal$DepthTest, 515, write, near, far);
 };
 var $ianmackenzie$elm_3d_scene$Scene3d$upperFourBits = 240;
@@ -16864,9 +16864,9 @@ var $elm$core$Basics$isInfinite = _Basics_isInfinite;
 var $ianmackenzie$elm_3d_camera$WebGL$Matrices$projectionMatrix = F2(
 	function (_v0, _v1) {
 		var camera = _v0;
-		var nearClipDepth = _v1.fz;
-		var farClipDepth = _v1.fi;
 		var aspectRatio = _v1.eY;
+		var farClipDepth = _v1.fi;
+		var nearClipDepth = _v1.fz;
 		var _v2 = $ianmackenzie$elm_units$Quantity$abs(nearClipDepth);
 		var n = _v2;
 		var _v3 = $ianmackenzie$elm_units$Quantity$abs(farClipDepth);
@@ -17239,9 +17239,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Light$directional = F2(
 	function (_v0, light) {
 		var shadowFlag = _v0;
 		var _v1 = $ianmackenzie$elm_geometry$Direction3d$unwrap(light.cy);
-		var x = _v1.eS;
-		var y = _v1.eT;
 		var z = _v1.eV;
+		var y = _v1.eT;
+		var x = _v1.eS;
 		var _v2 = A2($ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$chromaticityToLinearRgb, light.cC, light.bQ);
 		var rgb = _v2;
 		return {
@@ -17305,9 +17305,9 @@ var $ianmackenzie$elm_3d_scene$Scene3d$Light$soft = function (light) {
 				var nitsAbove = $elm$core$Basics$abs(
 					$ianmackenzie$elm_units$Illuminance$inLux(light.fr) / $elm$core$Basics$pi);
 				var _v0 = $ianmackenzie$elm_geometry$Direction3d$unwrap(light.fW);
-				var x = _v0.eS;
-				var y = _v0.eT;
 				var z = _v0.eV;
+				var y = _v0.eT;
+				var x = _v0.eS;
 				var _v1 = A2(
 					$ianmackenzie$elm_3d_scene$Scene3d$ColorConversions$chromaticityToLinearRgb,
 					$ianmackenzie$elm_units$Quantity$float(1),
@@ -17539,9 +17539,9 @@ var $author$project$Tubes$view = function (model) {
 				function () {
 					var _v0 = model.ap;
 					if (!_v0.$) {
-						var mesh = _v0.a.ap;
-						var shadow = _v0.a.de;
 						var boundingBox = _v0.a.ct;
+						var shadow = _v0.a.de;
+						var mesh = _v0.a.ap;
 						var focalPoint = $ianmackenzie$elm_geometry$BoundingBox3d$centerPoint(boundingBox);
 						var _v1 = $ianmackenzie$elm_geometry$BoundingBox3d$dimensions(boundingBox);
 						var x = _v1.a;
