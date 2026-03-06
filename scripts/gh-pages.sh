@@ -32,6 +32,7 @@ for example in *.elm; do
   elm make $example --optimize --output ../../gh-pages$version_path/examples/$lower/index.html
 done
 cp Pod.png Pod.obj.txt ../../gh-pages$version_path/examples/pod
+cp Nefertiti.obj.txt NefertitiColor.png NefertitiNormalMap.png ../../gh-pages$version_path/examples/nefertiti
 cp ../pod.png ../../gh-pages$version_path/examples
 
 cd ../../gh-pages

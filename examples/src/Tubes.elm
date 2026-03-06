@@ -21,17 +21,16 @@ import Json.Decode
 import Length exposing (Meters)
 import Obj.Decode exposing (ObjCoordinates)
 import Obj.Encode
-import Path
 import Pixels exposing (Pixels)
 import Point3d exposing (Point3d)
 import Quantity exposing (Quantity, Unitless)
 import Scene3d
 import Scene3d.Material
 import Scene3d.Mesh exposing (Shadow, Uniform)
-import SubPath
+import SketchPlane3d
+import SvgPathToSegments
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
-import Viewpoint3d
 
 
 type alias Model =
@@ -166,15 +165,13 @@ view model =
                             Quantity.max x y
 
                         camera =
-                            Camera3d.perspective
-                                { viewpoint =
-                                    Viewpoint3d.orbitZ
-                                        { focalPoint = focalPoint
-                                        , azimuth = model.azimuth
-                                        , elevation = model.elevation
-                                        , distance = Quantity.multiplyBy (3 - 2 * model.zoom) distance
-                                        }
-                                , verticalFieldOfView = Angle.degrees 30
+                            Camera3d.orbitZ
+                                { focalPoint = focalPoint
+                                , azimuth = model.azimuth
+                                , elevation = model.elevation
+                                , distance = Quantity.multiplyBy (3 - 2 * model.zoom) distance
+                                , projection = Camera3d.Perspective
+                                , fov = Camera3d.angle (Angle.degrees 30)
                                 }
                     in
                     [ Scene3d.sunny
@@ -288,105 +285,100 @@ tubes svgPath =
         segment =
             5
 
-        slope =
-            0
-
         resolution =
             8
 
-        pathToEntity path result =
-            path
-                |> SubPath.arcLengthParameterized 0.01
-                |> (\parametrization ->
-                        let
-                            length =
-                                SubPath.arcLength parametrization
+        pathToEntity paramPath result =
+            let
+                length =
+                    SvgPathToSegments.totalLength paramPath
 
-                            subdivisions =
-                                round (length / segment)
+                svgPlane =
+                    SketchPlane3d.unsafe
+                        { originPoint = Point3d.origin
+                        , xDirection = Direction3d.x
+                        , yDirection = Direction3d.negativeY
+                        }
 
-                            pointOnPath u =
+                pointOnPath distance =
+                    case SvgPathToSegments.sampleAt paramPath distance of
+                        Just ( point2d, tangent2d ) ->
+                            { position =
+                                Point3d.on svgPlane point2d
+                                    |> Point3d.scaleAbout Point3d.origin 0.001
+                            , tangent = Direction3d.on svgPlane tangent2d
+                            }
+
+                        Nothing ->
+                            { position = Point3d.origin
+                            , tangent = Direction3d.x
+                            }
+
+                endCap p =
+                    let
+                        { tangent, position } =
+                            pointOnPath p
+
+                        flippedNormal =
+                            if p == 0 then
+                                Direction3d.toVector (Direction3d.reverse tangent)
+
+                            else
+                                Direction3d.toVector tangent
+                    in
+                    TriangularMesh.radial
+                        { position = position
+                        , normal = flippedNormal
+                        }
+                        (List.map
+                            (\i ->
                                 let
-                                    ( px, py ) =
-                                        SubPath.pointAlong parametrization (length * u)
-                                            |> Maybe.withDefault ( 0, 0 )
-
-                                    ( tx, ty ) =
-                                        SubPath.tangentAlong parametrization (length * u)
-                                            |> Maybe.withDefault ( 0, 0 )
-                                in
-                                { position = Point3d.millimeters px -py (u * slope)
-                                , tangent = Direction3d.unsafe { x = tx, y = -ty, z = 0 }
-                                , normal = Direction3d.z
-                                }
-
-                            endCap p =
-                                let
-                                    { tangent, position, normal } =
-                                        pointOnPath p
-
-                                    flippedNormal =
+                                    u =
                                         if p == 0 then
-                                            Direction3d.toVector (Direction3d.reverse tangent)
+                                            -(toFloat i / toFloat resolution)
 
                                         else
-                                            Direction3d.toVector tangent
+                                            toFloat i / toFloat resolution
+
+                                    frame =
+                                        Frame3d.atOrigin
+                                            |> Frame3d.translateIn Direction3d.z radius
+                                            |> Frame3d.rotateAround (Axis3d.withDirection tangent position) (Angle.turns u)
                                 in
-                                TriangularMesh.radial
-                                    { position = position
-                                    , normal = flippedNormal
-                                    }
-                                    (List.map
-                                        (\i ->
-                                            let
-                                                u =
-                                                    if p == 0 then
-                                                        -(toFloat i / toFloat resolution)
+                                { position = Point3d.placeIn frame position
+                                , normal = flippedNormal
+                                }
+                            )
+                            (List.range 0 resolution)
+                        )
 
-                                                    else
-                                                        toFloat i / toFloat resolution
+                tube =
+                    TriangularMesh.tube (round (length / segment))
+                        resolution
+                        (\u v ->
+                            let
+                                { tangent, position } =
+                                    pointOnPath (u * length)
 
-                                                frame =
-                                                    Frame3d.atOrigin
-                                                        |> Frame3d.translateIn normal radius
-                                                        |> Frame3d.rotateAround (Axis3d.withDirection tangent position) (Angle.turns u)
-                                            in
-                                            { position = Point3d.placeIn frame position
-                                            , normal = flippedNormal
-                                            }
-                                        )
-                                        (List.range 0 resolution)
-                                    )
-
-                            tube =
-                                TriangularMesh.tube subdivisions
-                                    resolution
-                                    (\u v ->
-                                        let
-                                            { tangent, position, normal } =
-                                                pointOnPath u
-
-                                            frame =
-                                                Frame3d.atOrigin
-                                                    |> Frame3d.translateIn normal radius
-                                                    |> Frame3d.rotateAround (Axis3d.withDirection tangent position) (Angle.turns -v)
-                                        in
-                                        { position = Point3d.placeIn frame position
-                                        , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
-                                        }
-                                    )
-                        in
-                        tube :: endCap 0 :: endCap 1 :: result
-                   )
+                                frame =
+                                    Frame3d.atOrigin
+                                        |> Frame3d.translateIn Direction3d.z radius
+                                        |> Frame3d.rotateAround (Axis3d.withDirection tangent position) (Angle.turns -v)
+                            in
+                            { position = Point3d.placeIn frame position
+                            , normal = Direction3d.toVector (Direction3d.placeIn frame Direction3d.z)
+                            }
+                        )
+            in
+            tube :: endCap 0 :: endCap 1 :: result
     in
     svgPath
-        |> Path.parse
-        |> Result.toMaybe
+        |> SvgPathToSegments.parsePath
         |> Maybe.map
-            (\result ->
+            (\paramPaths ->
                 let
                     triangularMesh =
-                        TriangularMesh.combine (List.foldl pathToEntity [] result)
+                        TriangularMesh.combine (List.foldl pathToEntity [] paramPaths)
 
                     boundingBox =
                         triangularMesh
