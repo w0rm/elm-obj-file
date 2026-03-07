@@ -1,5 +1,6 @@
 module Primitives exposing
-    ( faces
+    ( bumpyFaces
+    , faces
     , points
     , polylines
     , texturedFaces
@@ -17,8 +18,10 @@ import Length exposing (Meters)
 import Obj.Decode as Decode exposing (ObjCoordinates)
 import Point3d
 import Polyline3d
+import Quantity exposing (Quantity(..))
 import Test exposing (Test)
 import TriangularMesh
+import Vector3d
 
 
 type ZUpCoords
@@ -233,6 +236,140 @@ texturedFaces =
                 ""
                     |> Decode.decodeString Length.centimeters (Decode.object "Cube" (Decode.defaultGroup Decode.texturedFaces))
                     |> Expect.equal (Err "No faces found for group 'default', object 'Cube'")
+        ]
+
+
+bumpyFaces : Test
+bumpyFaces =
+    Test.describe "bumpyFaces"
+        [ Test.test "extracts vertices, indices and tangents" <|
+            \_ ->
+                objFile
+                    |> Decode.decodeString Length.centimeters Decode.bumpyFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.vertices mesh |> Array.toList of
+                                [] ->
+                                    Expect.fail "Missing vertices"
+
+                                vertices ->
+                                    let
+                                        faceIndices =
+                                            TriangularMesh.faceIndices mesh
+
+                                        perVertexChecks =
+                                            List.map
+                                                (\v ->
+                                                    \_ ->
+                                                        let
+                                                            (Quantity len) =
+                                                                Vector3d.length v.tangent
+
+                                                            (Quantity dot) =
+                                                                Vector3d.dot v.tangent v.normal
+                                                        in
+                                                        Expect.all
+                                                            [ \_ -> Expect.within (Expect.Absolute 0.0001) 1 len
+                                                            , \_ -> Expect.within (Expect.Absolute 0.0001) 0 dot
+                                                            ]
+                                                            ()
+                                                )
+                                                vertices
+
+                                        perFaceHandednessChecks =
+                                            faceIndices
+                                                |> List.concatMap
+                                                    (\( i1, i2, i3 ) ->
+                                                        case ( Array.get i1 (TriangularMesh.vertices mesh), Array.get i2 (TriangularMesh.vertices mesh), Array.get i3 (TriangularMesh.vertices mesh) ) of
+                                                            ( Just v1, Just v2, Just v3 ) ->
+                                                                let
+                                                                    p1 =
+                                                                        Point3d.toMeters v1.position
+
+                                                                    p2 =
+                                                                        Point3d.toMeters v2.position
+
+                                                                    p3 =
+                                                                        Point3d.toMeters v3.position
+
+                                                                    ( u1, v1u ) =
+                                                                        v1.uv
+
+                                                                    ( u2, v2u ) =
+                                                                        v2.uv
+
+                                                                    ( u3, v3u ) =
+                                                                        v3.uv
+
+                                                                    dX1 =
+                                                                        p2.x - p1.x
+
+                                                                    dX2 =
+                                                                        p3.x - p1.x
+
+                                                                    dY1 =
+                                                                        p2.y - p1.y
+
+                                                                    dY2 =
+                                                                        p3.y - p1.y
+
+                                                                    dZ1 =
+                                                                        p2.z - p1.z
+
+                                                                    dZ2 =
+                                                                        p3.z - p1.z
+
+                                                                    dU1 =
+                                                                        u2 - u1
+
+                                                                    dU2 =
+                                                                        u3 - u1
+
+                                                                    dV1 =
+                                                                        v2u - v1u
+
+                                                                    dV2 =
+                                                                        v3u - v1u
+
+                                                                    denom =
+                                                                        dU1 * dV2 - dV1 * dU2
+
+                                                                    r =
+                                                                        1.0 / denom
+
+                                                                    faceTangent =
+                                                                        Vector3d.unitless
+                                                                            ((dX1 * dV2 - dX2 * dV1) * r)
+                                                                            ((dY1 * dV2 - dY2 * dV1) * r)
+                                                                            ((dZ1 * dV2 - dZ2 * dV1) * r)
+
+                                                                    faceBitangent =
+                                                                        Vector3d.unitless
+                                                                            ((dX2 * dU1 - dX1 * dU2) * r)
+                                                                            ((dY2 * dU1 - dY1 * dU2) * r)
+                                                                            ((dZ2 * dU1 - dZ1 * dU2) * r)
+
+                                                                    handedness vertex =
+                                                                        let
+                                                                            (Quantity sign) =
+                                                                                Vector3d.dot (Vector3d.cross vertex.normal faceTangent) faceBitangent
+                                                                        in
+                                                                        sign > 0
+                                                                in
+                                                                [ \_ -> Expect.equal (handedness v1) v1.tangentBasisIsRightHanded
+                                                                , \_ -> Expect.equal (handedness v2) v2.tangentBasisIsRightHanded
+                                                                , \_ -> Expect.equal (handedness v3) v3.tangentBasisIsRightHanded
+                                                                ]
+
+                                                            _ ->
+                                                                [ \_ -> Expect.fail "Face index out of range" ]
+                                                    )
+                                    in
+                                    Expect.all
+                                        (perVertexChecks ++ perFaceHandednessChecks)
+                                        ()
+                        )
+                    |> Result.withDefault (Expect.fail "Failed decoding")
         ]
 
 
