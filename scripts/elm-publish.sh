@@ -26,7 +26,7 @@ git commit -m "Bump to $version"
 git push
 last_commit=$(git rev-parse HEAD)
 
-git rm -rf --ignore-unmatch .github examples tests benchmarks
+git rm -rf --ignore-unmatch .github examples tests benchmarks review scripts flake.lock flake.nix .gitignore
 sed -i.bak "s+https://unsoundscapes.com/elm-obj-file/+https://unsoundscapes.com/elm-obj-file/$version/+g" README.md
 sed -i.bak "s+https://github.com/w0rm/elm-obj-file/tree/main/+https://github.com/w0rm/elm-obj-file/tree/$last_commit/+g" README.md
 rm README.md.bak
