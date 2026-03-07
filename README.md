@@ -2,13 +2,13 @@
 
 An Elm package to encode and decode 3D geometry in the [OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file). Meshes are returned as [`TriangularMesh`](https://package.elm-lang.org/packages/ianmackenzie/elm-triangular-mesh/latest) values, which makes them easy to render with [elm-3d-scene](https://package.elm-lang.org/packages/ianmackenzie/elm-3d-scene/latest) but can also be used with any other 3D graphics system. You could even take the geometric data and use it for 3D printing, [physics simulations](https://package.elm-lang.org/packages/w0rm/elm-physics/latest/), [finite element analysis](https://en.wikipedia.org/wiki/Finite_element_method) or whatever other crazy thing you want to do =)
 
-![The “Pod” model by Kolja Wilcke](https://unsoundscapes.com/elm-obj-file/examples/pod.png)
+![The “Pod” model by Kolja Wilcke](https://unsoundscapes.com/elm-obj-file/1.3.0/examples/pod.png)
 
-_The “Pod” model by [@01k](https://mobile.twitter.com/01k) rendered with `elm-3d-scene`. [See it live here](https://unsoundscapes.com/elm-obj-file/examples/pod/)._
+_The “Pod” model by [@01k](https://mobile.twitter.com/01k) rendered with `elm-3d-scene`. [See it live here](https://unsoundscapes.com/elm-obj-file/1.3.0/examples/pod/)._
 
-Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/examples/viewer/) that lets you preview OBJ files. [The Nefertiti example](https://unsoundscapes.com/elm-obj-file/examples/nefertiti/) demonstrates support for loading bumpy faces with a normal map texture.
+Make sure to check [the viewer example](https://unsoundscapes.com/elm-obj-file/1.3.0/examples/viewer/) that lets you preview OBJ files. [The Nefertiti example](https://unsoundscapes.com/elm-obj-file/1.3.0/examples/nefertiti/) demonstrates support for loading bumpy faces with a normal map texture.
 
-The examples source code [can be found here](https://github.com/w0rm/elm-obj-file/tree/main/examples).
+The examples source code [can be found here](https://github.com/w0rm/elm-obj-file/tree/9dfc5d6f89a49502a8e143a0329e3ac9dfb868b9/examples).
 
 ```elm
 {-| Load a mesh from an HTTP request. -}
