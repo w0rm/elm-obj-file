@@ -25,7 +25,7 @@ import Vector3d
 
 
 type ZUpCoords
-    = ZUpCoords
+    = ZUpCoords Never
 
 
 yUpToZUpFrame : Frame3d Meters ZUpCoords { defines : ObjCoordinates }
