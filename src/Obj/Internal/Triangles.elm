@@ -3,7 +3,7 @@ module Obj.Internal.Triangles exposing
     , triangles
     )
 
-import Array exposing (Array)
+import Array
 import Frame3d exposing (Frame3d)
 import Length exposing (Meters)
 import Obj.Internal.IndexMap as IndexMap exposing (IndexMap, Key1, Key2)

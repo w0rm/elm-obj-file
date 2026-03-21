@@ -215,7 +215,6 @@ parseHelp units lines lineno positions normals uvs groups object_ material_ grou
                 fullGroups =
                     -- flush the last group
                     addNonEmptyGroup object_ material_ groups_ currentSmoothingGroup faceElements lineElements pointsElements groups
-
             in
             Ok
                 ( { positions = positionsArray
