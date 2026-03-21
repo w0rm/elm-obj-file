@@ -12,10 +12,10 @@ import TriangularMesh exposing (TriangularMesh)
 {-| Build the final `TriangularMesh` or return an error if no faces were produced.
 -}
 buildMeshResult : List String -> Array v -> List ( Int, Int, Int ) -> Result String (TriangularMesh v)
-buildMeshResult filters vertices faceIndices =
+buildMeshResult filters faceVertices faceIndices =
     case faceIndices of
         _ :: _ ->
-            Ok (TriangularMesh.indexed vertices faceIndices)
+            Ok (TriangularMesh.indexed faceVertices faceIndices)
 
         [] ->
             case filters of

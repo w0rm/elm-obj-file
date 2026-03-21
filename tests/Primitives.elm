@@ -100,6 +100,30 @@ triangles =
                 ""
                     |> Decode.decodeString Length.centimeters (Decode.object "Cube" (Decode.defaultGroup Decode.triangles))
                     |> Expect.equal (Err "No faces found for group 'default', object 'Cube'")
+        , Test.test "face indices are in parse order" <|
+            \_ ->
+                -- Two triangles: first triangle's first vertex has unique x=99.
+                -- The first entry in faceIndices must reference the first triangle.
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+f 1 2 3
+f 4 5 6"""
+                    |> Decode.decodeString Length.meters Decode.triangles
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
         ]
 
 
@@ -168,6 +192,75 @@ faces =
                 ""
                     |> Decode.decodeString Length.centimeters (Decode.object "Cube" (Decode.defaultGroup Decode.faces))
                     |> Expect.equal (Err "No faces found for group 'default', object 'Cube'")
+        , Test.test "face indices are in parse order (explicit normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vn 0 0 1
+f 1//1 2//1 3//1
+f 4//1 5//1 6//1"""
+                    |> Decode.decodeString Length.meters Decode.faces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
+        , Test.test "face indices are in parse order (reconstructed smooth normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+s 1
+f 1 2 3
+f 4 5 6"""
+                    |> Decode.decodeString Length.meters Decode.faces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
+        , Test.test "face indices are in parse order (reconstructed flat normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+s off
+f 1 2 3
+f 4 5 6"""
+                    |> Decode.decodeString Length.meters Decode.faces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
         ]
 
 
@@ -268,6 +361,84 @@ texturedFaces =
                 ""
                     |> Decode.decodeString Length.centimeters (Decode.object "Cube" (Decode.defaultGroup Decode.texturedFaces))
                     |> Expect.equal (Err "No faces found for group 'default', object 'Cube'")
+        , Test.test "face indices are in parse order (explicit normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vt 0 0
+vt 1 0
+vt 0 1
+vn 0 0 1
+f 1/1/1 2/2/1 3/3/1
+f 4/1/1 5/2/1 6/3/1"""
+                    |> Decode.decodeString Length.meters Decode.texturedFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
+        , Test.test "face indices are in parse order (reconstructed smooth normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vt 0 0
+vt 1 0
+vt 0 1
+s 1
+f 1/1 2/2 3/3
+f 4/1 5/2 6/3"""
+                    |> Decode.decodeString Length.meters Decode.texturedFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
+        , Test.test "face indices are in parse order (reconstructed flat normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vt 0 0
+vt 1 0
+vt 0 1
+s off
+f 1/1 2/2 3/3
+f 4/1 5/2 6/3"""
+                    |> Decode.decodeString Length.meters Decode.texturedFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
         ]
 
 
@@ -402,6 +573,84 @@ bumpyFaces =
                                         ()
                         )
                     |> Result.withDefault (Expect.fail "Failed decoding")
+        , Test.test "face indices are in parse order (explicit normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vt 0 0
+vt 1 0
+vt 0 1
+vn 0 0 1
+f 1/1/1 2/2/1 3/3/1
+f 4/1/1 5/2/1 6/3/1"""
+                    |> Decode.decodeString Length.meters Decode.bumpyFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
+        , Test.test "face indices are in parse order (reconstructed smooth normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vt 0 0
+vt 1 0
+vt 0 1
+s 1
+f 1/1 2/2 3/3
+f 4/1 5/2 6/3"""
+                    |> Decode.decodeString Length.meters Decode.bumpyFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
+        , Test.test "face indices are in parse order (reconstructed flat normals)" <|
+            \_ ->
+                """v 99 0 0
+v 1 0 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 2 1 0
+vt 0 0
+vt 1 0
+vt 0 1
+s off
+f 1/1 2/2 3/3
+f 4/1 5/2 6/3"""
+                    |> Decode.decodeString Length.meters Decode.bumpyFaces
+                    |> Result.map
+                        (\mesh ->
+                            case TriangularMesh.faceIndices mesh of
+                                ( i1, _, _ ) :: _ ->
+                                    TriangularMesh.vertex i1 mesh
+                                        |> Maybe.map (.position >> Point3d.toMeters >> .x)
+
+                                [] ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just 99.0))
         ]
 
 
