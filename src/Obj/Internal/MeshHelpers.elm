@@ -29,20 +29,20 @@ buildMeshResult filters faceVertices faceIndices =
 {-| Split the indices of the faces into triples, forming a triangle fan.
 -}
 groupIndices : Int -> List Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )
-groupIndices p1 more result =
-    case more of
+groupIndices p1 indices outFaceIndices =
+    case indices of
         p2 :: rest ->
             case rest of
                 p3 :: _ ->
                     -- Note that when it comes to grouping, the order of points is reversed
                     -- but the indices were reversed too, when parsing, so this is fine :-)
-                    groupIndices p1 rest (( p1, p2, p3 ) :: result)
+                    groupIndices p1 rest (( p1, p2, p3 ) :: outFaceIndices)
 
                 [] ->
-                    result
+                    outFaceIndices
 
         [] ->
-            result
+            outFaceIndices
 
 
 {-| returns -1 if not found

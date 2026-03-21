@@ -32,25 +32,25 @@ import Vector3d exposing (Vector3d)
 Fast path (all faces have explicit normals in OBJ):
 
       triangularMesh / addFaces
-        faceVertices: accumulated by prepending         → [vN,..,v1] (reversed)
-        faceIndices:  two reversals restore parse order → [f1,..,fN] (parse order)
+        outFaceVertices: accumulated by prepending         → [vN,..,v1] (reversed)
+        outFaceIndices:  two reversals restore parse order → [f1,..,fN] (parse order)
 
-      Array.fromList (List.reverse faceVertices) → [v1,..,vN] ✓
-      faceIndices passed as-is                   → [f1,..,fN] ✓
+      Array.fromList (List.reverse outFaceVertices) → [v1,..,vN] ✓
+      outFaceIndices passed as-is                   → [f1,..,fN] ✓
 
 Deferred path (some faces need normals reconstructed):
 
       triangularMesh / addFaces
-        faceVertices: [vM,..,v1]   (reversed)
-        faceIndices:  [f1,..,fM]   (parse order, fast-path faces only)
-        deferredFaces:[fd1,..,fdK] (parse order)
+        outFaceVertices: [vM,..,v1]   (reversed)
+        outFaceIndices:  [f1,..,fM]   (parse order, fast-path faces only)
+        outPendingFaces: [fd1,..,fdK] (parse order)
 
-      generateFacesNormals (prepends new faceVertices/faceIndices onto existing state)
-        faceVertices: [vN,..,vM+1 | vM,..,v1] (still reversed)
-        faceIndices:  [fdK,..,fd1 | f1,..,fM] (reversed: reconstructed indices prepended onto fast-path indices)
+      generateFacesNormals (prepends new outFaceVertices/outFaceIndices onto existing state)
+        outFaceVertices: [vN,..,vM+1 | vM,..,v1] (still reversed)
+        outFaceIndices:  [fdK,..,fd1 | f1,..,fM] (reversed: reconstructed indices prepended onto fast-path indices)
 
-      Array.fromList (List.reverse faceVertices) → [v1,..,vN]             ✓
-      List.reverse faceIndices                   → [fM,..,f1, fd1,..,fdK] ✓
+      Array.fromList (List.reverse outFaceVertices) → [v1,..,vN]             ✓
+      List.reverse outFaceIndices                   → [fM,..,f1, fd1,..,fdK] ✓
 
 -}
 faces :
@@ -66,7 +66,7 @@ faces frame bitflags vertexData filters filteredGroups =
             Err e
 
         Ok state ->
-            case state.deferredFaces of
+            case state.pendingFaces of
                 [] ->
                     buildMeshResult filters (Array.fromList (List.reverse state.faceVertices)) state.faceIndices
 
@@ -79,10 +79,10 @@ faces frame bitflags vertexData filters filteredGroups =
                             else
                                 collectWeightedNormals vertexData filteredGroups Dict.empty (smoothingGroupsSet filteredGroups)
 
-                        ( faceVertices, faceIndices ) =
-                            generateFacesNormals frame vertexData state.deferredFaces Dict.empty state.faceVertices (state.maxIndex + 1) state.faceIndices weightedNormals bitflags
+                        ( outFaceVertices, outFaceIndices ) =
+                            generateFacesNormals frame vertexData state.pendingFaces Dict.empty state.faceVertices (state.maxIndex + 1) state.faceIndices weightedNormals bitflags
                     in
-                    buildMeshResult filters (Array.fromList (List.reverse faceVertices)) (List.reverse faceIndices)
+                    buildMeshResult filters (Array.fromList (List.reverse outFaceVertices)) (List.reverse outFaceIndices)
 
 
 texturedFaces :
@@ -98,7 +98,7 @@ texturedFaces frame bitflags vertexData filters filteredGroups =
             Err e
 
         Ok state ->
-            case state.deferredFaces of
+            case state.pendingFaces of
                 [] ->
                     buildMeshResult filters (Array.fromList (List.reverse state.faceVertices)) state.faceIndices
 
@@ -111,10 +111,10 @@ texturedFaces frame bitflags vertexData filters filteredGroups =
                             else
                                 collectWeightedNormals vertexData filteredGroups Dict.empty (smoothingGroupsSet filteredGroups)
 
-                        ( vertices, faceIndices ) =
-                            generateTexturedFacesNormals frame vertexData state.deferredFaces Dict.empty state.faceVertices (state.maxIndex + 1) state.faceIndices weightedNormals bitflags
+                        ( outFaceVertices, outFaceIndices ) =
+                            generateTexturedFacesNormals frame vertexData state.pendingFaces Dict.empty state.faceVertices (state.maxIndex + 1) state.faceIndices weightedNormals bitflags
                     in
-                    buildMeshResult filters (Array.fromList (List.reverse vertices)) (List.reverse faceIndices)
+                    buildMeshResult filters (Array.fromList (List.reverse outFaceVertices)) (List.reverse outFaceIndices)
 
 
 {-| Pipeline for bumpyFaces:
@@ -122,27 +122,27 @@ texturedFaces frame bitflags vertexData filters filteredGroups =
 Fast path (all faces have explicit normals in OBJ):
 
       triangularMesh / addTexturedFaces
-        faceVertices: accumulated by prepending         → [vN,..,v1] (reversed)
-        faceIndices:  two reversals restore parse order → [f1,..,fN] (parse order)
+        outFaceVertices: accumulated by prepending         → [vN,..,v1] (reversed)
+        outFaceIndices:  two reversals restore parse order → [f1,..,fN] (parse order)
 
-      computeTangents filters faceVertices faceIndices
-        faceVertices received reversed → addZeroTangents un-reverses → [v1,..,vN] ✓
-        faceIndices passed as-is                                     → [f1,..,fN] ✓
+      computeTangents filters outFaceVertices outFaceIndices
+        outFaceVertices received reversed → addZeroTangents un-reverses → [v1,..,vN] ✓
+        outFaceIndices passed as-is                                     → [f1,..,fN] ✓
 
 Deferred path (some faces need normals reconstructed):
 
       triangularMesh / addTexturedFaces
-        faceVertices: [vM,..,v1]   (reversed)
-        faceIndices:  [f1,..,fM]   (parse order, fast-path faces only)
-        deferredFaces:[fd1,..,fdK] (parse order)
+        outFaceVertices: [vM,..,v1]   (reversed)
+        outFaceIndices:  [f1,..,fM]   (parse order, fast-path faces only)
+        outPendingFaces: [fd1,..,fdK] (parse order)
 
-      generateTexturedFacesNormals (prepends new faceVertices/faceIndices onto existing state)
-        faceVertices: [vN,..,vM+1 | vM,..,v1]  (still reversed)
-        faceIndices:  [fdK,..,fd1 | f1,..,fM]  (reversed: reconstructed indices prepended onto fast-path indices)
+      generateTexturedFacesNormals (prepends new outFaceVertices/outFaceIndices onto existing state)
+        outFaceVertices: [vN,..,vM+1 | vM,..,v1]  (still reversed)
+        outFaceIndices:  [fdK,..,fd1 | f1,..,fM]  (reversed: reconstructed indices prepended onto fast-path indices)
 
-      computeTangents filters faceVertices (List.reverse faceIndices)
-        faceVertices received reversed → addZeroTangents un-reverses → [v1,..,vN]             ✓
-        List.reverse faceIndices                                     → [fM,..,f1, fd1,..,fdK] ✓
+      computeTangents filters outFaceVertices (List.reverse outFaceIndices)
+        outFaceVertices received reversed → addZeroTangents un-reverses → [v1,..,vN]             ✓
+        List.reverse outFaceIndices                                     → [fM,..,f1, fd1,..,fdK] ✓
 
 -}
 bumpyFaces :
@@ -158,7 +158,7 @@ bumpyFaces frame bitflags vertexData filters filteredGroups =
             Err e
 
         Ok state ->
-            case state.deferredFaces of
+            case state.pendingFaces of
                 [] ->
                     computeTangents filters state.faceVertices state.faceIndices
 
@@ -171,10 +171,10 @@ bumpyFaces frame bitflags vertexData filters filteredGroups =
                             else
                                 collectWeightedNormals vertexData filteredGroups Dict.empty (smoothingGroupsSet filteredGroups)
 
-                        ( vertices, faceIndices ) =
-                            generateTexturedFacesNormals frame vertexData state.deferredFaces Dict.empty state.faceVertices (state.maxIndex + 1) state.faceIndices weightedNormals bitflags
+                        ( outFaceVertices, outFaceIndices ) =
+                            generateTexturedFacesNormals frame vertexData state.pendingFaces Dict.empty state.faceVertices (state.maxIndex + 1) state.faceIndices weightedNormals bitflags
                     in
-                    computeTangents filters vertices (List.reverse faceIndices)
+                    computeTangents filters outFaceVertices (List.reverse outFaceIndices)
 
 
 type alias Face coordinates =
@@ -195,12 +195,12 @@ type alias IndexedFaces a =
     , indexMap : Array (List Int)
     , faceVertices : List a
     , faceIndices : List ( Int, Int, Int )
-    , deferredFaces : List PendingFace
+    , pendingFaces : List PendingFace
     }
 
 
 {-| Like AddIndexedTriangles, but also carries a smoothing group and collects
-faces that lack normals into a `DeferredFace` list rather than failing.
+faces that lack normals into an `outPendingFaces` list rather than failing.
 Used by both `addTexturedFaces` and `addBumpyFaces`.
 -}
 type alias AddIndexedFaces a =
@@ -231,11 +231,11 @@ passes.
 
 Iterates over every `Group` in turn, dispatching each group's face elements to
 `add`. Faces whose vertices all have explicit normals are handled immediately by
-the fast path; faces missing a normal are appended to `pending` for the
+the fast path; faces missing a normal are appended to `outPendingFaces` for the
 reconstruction pass.
 
-When `pending` is empty on return the caller can build the final mesh directly
-from `faceIndices` and `vertices` without any reconstruction work.
+When `outPendingFaces` is empty on return the caller can build the final mesh directly
+from `outFaceIndices` and `outFaceVertices` without any reconstruction work.
 
 -}
 triangularMesh :
@@ -247,29 +247,29 @@ triangularMesh :
     -> List ( Int, Int, Int )
     -> List PendingFace
     -> Result String (IndexedFaces a)
-triangularMesh add groups maxIndex indexMap faceVertices faceIndices pendingFaces =
+triangularMesh add groups maxIndex indexMap outFaceVertices outFaceIndices outPendingFaces =
     case groups of
         (Group record ((FaceElement lineno hasNormals elementVertices) :: faceElements) _ _) :: remainingGroups ->
             let
                 ( firstElementVertices, firstPendingFace ) =
                     if hasNormals then
-                        ( elementVertices, pendingFaces )
+                        ( elementVertices, outPendingFaces )
 
                     else
-                        ( [], { lineno = lineno, smoothingGroup = record.smoothingGroup, elementVertices = elementVertices } :: pendingFaces )
+                        ( [], { lineno = lineno, smoothingGroup = record.smoothingGroup, elementVertices = elementVertices } :: outPendingFaces )
             in
-            case add record.smoothingGroup lineno firstElementVertices faceElements maxIndex indexMap faceVertices [] faceIndices firstPendingFace of
+            case add record.smoothingGroup lineno firstElementVertices faceElements maxIndex indexMap outFaceVertices [] outFaceIndices firstPendingFace of
                 Ok newState ->
-                    triangularMesh add remainingGroups newState.maxIndex newState.indexMap newState.faceVertices newState.faceIndices newState.deferredFaces
+                    triangularMesh add remainingGroups newState.maxIndex newState.indexMap newState.faceVertices newState.faceIndices newState.pendingFaces
 
                 Err e ->
                     Err e
 
         (Group _ [] _ _) :: remainingGroups ->
-            triangularMesh add remainingGroups maxIndex indexMap faceVertices faceIndices pendingFaces
+            triangularMesh add remainingGroups maxIndex indexMap outFaceVertices outFaceIndices outPendingFaces
 
         [] ->
-            Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = faceVertices, faceIndices = faceIndices, deferredFaces = pendingFaces }
+            Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = outFaceVertices, faceIndices = outFaceIndices, pendingFaces = outPendingFaces }
 
 
 {-| Face- and vertex-level inner loop for the unified faces pass.
@@ -281,7 +281,7 @@ indexMap stores `(n, vertexIdx)` pairs rather than triples.
 
 -}
 addFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (Face coordinates)
-addFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap faceVertices indices faceIndices pending =
+addFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap outFaceVertices outIndices outFaceIndices outPendingFaces =
     case elementVertices of
         { p, n } :: remainingVertices ->
             let
@@ -305,10 +305,10 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
                     elements
                     maxIndex
                     indexMap
-                    faceVertices
-                    (idx :: indices)
-                    faceIndices
-                    pending
+                    outFaceVertices
+                    (idx :: outIndices)
+                    outFaceIndices
+                    outPendingFaces
 
             else
                 case Array.get p vertexData.positions of
@@ -326,11 +326,11 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
                                     ({ position = Point3d.placeIn frame position
                                      , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
                                      }
-                                        :: faceVertices
+                                        :: outFaceVertices
                                     )
-                                    (maxIndex + 1 :: indices)
-                                    faceIndices
-                                    pending
+                                    (maxIndex + 1 :: outIndices)
+                                    outFaceIndices
+                                    outPendingFaces
 
                             Nothing ->
                                 formatError lineno "Index out of range"
@@ -341,18 +341,18 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
         [] ->
             let
                 newFaceIndices =
-                    case indices of
+                    case outIndices of
                         p1 :: remainingIndices ->
                             -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
+                            groupIndices p1 remainingIndices outFaceIndices
 
                         [] ->
-                            faceIndices
+                            outFaceIndices
             in
             case elements of
                 (FaceElement newLineno hasNormals newElementVertices) :: rest ->
                     if hasNormals then
-                        addFaces frame vertexData smoothingGroup newLineno newElementVertices rest maxIndex indexMap faceVertices [] newFaceIndices pending
+                        addFaces frame vertexData smoothingGroup newLineno newElementVertices rest maxIndex indexMap outFaceVertices [] newFaceIndices outPendingFaces
 
                     else
                         addFaces frame
@@ -363,13 +363,13 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
                             rest
                             maxIndex
                             indexMap
-                            faceVertices
+                            outFaceVertices
                             []
                             newFaceIndices
-                            ({ lineno = newLineno, smoothingGroup = smoothingGroup, elementVertices = newElementVertices } :: pending)
+                            ({ lineno = newLineno, smoothingGroup = smoothingGroup, elementVertices = newElementVertices } :: outPendingFaces)
 
                 [] ->
-                    Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = faceVertices, faceIndices = newFaceIndices, deferredFaces = pending }
+                    Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = outFaceVertices, faceIndices = newFaceIndices, pendingFaces = outPendingFaces }
 
 
 {-| Face- and vertex-level inner loop for the unified textured-faces pass.
@@ -377,7 +377,7 @@ Parallel to `addBumpyFaces`; see that function's documentation for the
 fast-path and pending-path behaviour.
 -}
 addTexturedFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (TexturedFace coordinates)
-addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap faceVertices indices faceIndices pending =
+addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap outFaceVertices outIndices outFaceIndices outPendingFaces =
     case elementVertices of
         { p, uv, n } :: remainingVertices ->
             let
@@ -401,10 +401,10 @@ addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements
                     elements
                     maxIndex
                     indexMap
-                    faceVertices
-                    (idx :: indices)
-                    faceIndices
-                    pending
+                    outFaceVertices
+                    (idx :: outIndices)
+                    outFaceIndices
+                    outPendingFaces
 
             else
                 case Array.get p vertexData.positions of
@@ -425,11 +425,11 @@ addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements
                                              , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
                                              , uv = uvCoord
                                              }
-                                                :: faceVertices
+                                                :: outFaceVertices
                                             )
-                                            (maxIndex + 1 :: indices)
-                                            faceIndices
-                                            pending
+                                            (maxIndex + 1 :: outIndices)
+                                            outFaceIndices
+                                            outPendingFaces
 
                                     Nothing ->
                                         formatError lineno "Index out of range"
@@ -443,18 +443,18 @@ addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements
         [] ->
             let
                 newFaceIndices =
-                    case indices of
+                    case outIndices of
                         p1 :: remainingIndices ->
                             -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
+                            groupIndices p1 remainingIndices outFaceIndices
 
                         [] ->
-                            faceIndices
+                            outFaceIndices
             in
             case elements of
                 (FaceElement newLineno hasNormals newElementVertices) :: remainingElements ->
                     if hasNormals then
-                        addTexturedFaces frame vertexData smoothingGroup newLineno newElementVertices remainingElements maxIndex indexMap faceVertices [] newFaceIndices pending
+                        addTexturedFaces frame vertexData smoothingGroup newLineno newElementVertices remainingElements maxIndex indexMap outFaceVertices [] newFaceIndices outPendingFaces
 
                     else
                         addTexturedFaces frame
@@ -465,16 +465,16 @@ addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements
                             remainingElements
                             maxIndex
                             indexMap
-                            faceVertices
+                            outFaceVertices
                             []
                             newFaceIndices
-                            ({ lineno = newLineno, smoothingGroup = smoothingGroup, elementVertices = newElementVertices } :: pending)
+                            ({ lineno = newLineno, smoothingGroup = smoothingGroup, elementVertices = newElementVertices } :: outPendingFaces)
 
                 [] ->
-                    Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = faceVertices, faceIndices = newFaceIndices, deferredFaces = pending }
+                    Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = outFaceVertices, faceIndices = newFaceIndices, pendingFaces = outPendingFaces }
 
 
-{-| Vertices are accumulated in reverse order.
+{-| outFaceVertices is accumulated in reverse order.
 -}
 generateFacesNormals :
     Frame3d Meters coordinates { defines : ObjCoordinates }
@@ -487,10 +487,10 @@ generateFacesNormals :
     -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
     -> Bool
     -> ( List (Face coordinates), List ( Int, Int, Int ) )
-generateFacesNormals frame vertexData pendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags =
+generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags =
     case pendingFaces of
         [] ->
-            ( faceVertices, faceIndices )
+            ( outFaceVertices, outFaceIndices )
 
         pf :: remainingPendingFaces ->
             if pf.smoothingGroup == 0 then
@@ -508,19 +508,19 @@ generateFacesNormals frame vertexData pendingFaces vMap faceVertices idx faceInd
                                             pos1InFrame =
                                                 Point3d.placeIn frame pos1
                                         in
-                                        flatFacesNormals remainingElementVertices remainingPendingFaces frame vertexData pos0InFrame pos1InFrame False Vector3d.zero vMap faceVertices idx faceIndices weightedNormals bitflags
+                                        flatFacesNormals remainingElementVertices remainingPendingFaces frame vertexData pos0InFrame pos1InFrame False Vector3d.zero vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                                     Nothing ->
-                                        generateFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                                        generateFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                             Nothing ->
-                                generateFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                                generateFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                     _ ->
-                        generateFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                        generateFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
             else
-                buildFaceVertices frame vertexData remainingPendingFaces weightedNormals bitflags pf.smoothingGroup pf.elementVertices vMap faceVertices idx [] faceIndices
+                buildFaceVertices frame vertexData remainingPendingFaces weightedNormals bitflags pf.smoothingGroup pf.elementVertices vMap outFaceVertices outIdx [] outFaceIndices
 
 
 buildFaceVertices :
@@ -537,15 +537,15 @@ buildFaceVertices :
     -> List Int
     -> List ( Int, Int, Int )
     -> ( List (Face coordinates), List ( Int, Int, Int ) )
-buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup elementVertices vMap faceVertices idx indices faceIndices =
+buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup elementVertices vMap outFaceVertices outIdx outIndices outFaceIndices =
     case elementVertices of
         [] ->
-            case indices of
+            case outIndices of
                 i1 :: restIndices ->
-                    generateFacesNormals frame vertexData pendingFaces vMap faceVertices idx (groupIndices i1 restIndices faceIndices) weightedNormals bitflags
+                    generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx (groupIndices i1 restIndices outFaceIndices) weightedNormals bitflags
 
                 [] ->
-                    generateFacesNormals frame vertexData pendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                    generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
         { p } :: remainingElementVertices ->
             let
@@ -558,7 +558,7 @@ buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothi
                             -1
             in
             if existingIdx > -1 then
-                buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx (existingIdx :: indices) faceIndices
+                buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx (existingIdx :: outIndices) outFaceIndices
 
             else
                 case lookupNormal bitflags p smoothingGroup weightedNormals of
@@ -576,11 +576,11 @@ buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothi
                                         -- (p, smoothingGroup) is guaranteed unique here (lookup1 returned -1 above),
                                         -- so we always prepend a fresh pair; never overwrite an existing entry.
                                         (case Dict.get p vMap of
-                                            Just vmEntries ->
-                                                smoothingGroup :: idx :: vmEntries
+                                            Just outEntries ->
+                                                smoothingGroup :: outIdx :: outEntries
 
                                             Nothing ->
-                                                [ smoothingGroup, idx ]
+                                                [ smoothingGroup, outIdx ]
                                         )
                                         vMap
                                     )
@@ -589,20 +589,20 @@ buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothi
                                      -- Normalize the area-weighted sum to get a unit normal.
                                      , normal = Vector3d.placeIn frame (Vector3d.normalize normal)
                                      }
-                                        :: faceVertices
+                                        :: outFaceVertices
                                     )
-                                    (idx + 1)
-                                    (idx :: indices)
-                                    faceIndices
+                                    (outIdx + 1)
+                                    (outIdx :: outIndices)
+                                    outFaceIndices
 
                             Nothing ->
-                                buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx indices faceIndices
+                                buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
 
                     Nothing ->
-                        buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx indices faceIndices
+                        buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
 
 
-{-| Vertices are accumulated in reverse order.
+{-| outFaceVertices is accumulated in reverse order.
 -}
 flatFacesNormals :
     List Vertex
@@ -620,10 +620,10 @@ flatFacesNormals :
     -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
     -> Bool
     -> ( List (Face coordinates), List ( Int, Int, Int ) )
-flatFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame normalFound normalInFrame vMap faceVertices accIdx faceIndices weightedNormals bitflags =
+flatFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags =
     case elementVertices of
         [] ->
-            generateFacesNormals frame vertexData pendingFaces vMap faceVertices accIdx faceIndices weightedNormals bitflags
+            generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
         vN :: remainingElementVertices ->
             case Array.get vN.p vertexData.positions of
@@ -655,18 +655,18 @@ flatFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevP
                         ({ position = pos0InFrame, normal = normal }
                             :: { position = prevPosInFrame, normal = normal }
                             :: { position = posNInFrame, normal = normal }
-                            :: faceVertices
+                            :: outFaceVertices
                         )
-                        (accIdx + 3)
-                        (( accIdx, accIdx + 1, accIdx + 2 ) :: faceIndices)
+                        (outIdx + 3)
+                        (( outIdx, outIdx + 1, outIdx + 2 ) :: outFaceIndices)
                         weightedNormals
                         bitflags
 
                 Nothing ->
-                    flatFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame normalFound normalInFrame vMap faceVertices accIdx faceIndices weightedNormals bitflags
+                    flatFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
 
-{-| Vertices are accumulated in reverse order.
+{-| outFaceVertices is accumulated in reverse order.
 -}
 generateTexturedFacesNormals :
     Frame3d Meters coordinates { defines : ObjCoordinates }
@@ -679,10 +679,10 @@ generateTexturedFacesNormals :
     -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
     -> Bool
     -> ( List (TexturedFace coordinates), List ( Int, Int, Int ) )
-generateTexturedFacesNormals frame vertexData pendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags =
+generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags =
     case pendingFaces of
         [] ->
-            ( faceVertices, faceIndices )
+            ( outFaceVertices, outFaceIndices )
 
         pf :: remainingPendingFaces ->
             if pf.smoothingGroup == 0 then
@@ -704,25 +704,25 @@ generateTexturedFacesNormals frame vertexData pendingFaces vMap faceVertices idx
                                                             pos1InFrame =
                                                                 Point3d.placeIn frame pos1
                                                         in
-                                                        flatTexturedFacesNormals remainingElementVertices remainingPendingFaces frame vertexData pos0InFrame pos1InFrame uv0 uv1 False Vector3d.zero vMap faceVertices idx faceIndices weightedNormals bitflags
+                                                        flatTexturedFacesNormals remainingElementVertices remainingPendingFaces frame vertexData pos0InFrame pos1InFrame uv0 uv1 False Vector3d.zero vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                                                     Nothing ->
-                                                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                                                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                                             Nothing ->
-                                                generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                                                generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                                     Nothing ->
-                                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                             Nothing ->
-                                generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                                generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                     _ ->
-                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
             else
-                buildTexturedFaceVertices frame vertexData remainingPendingFaces weightedNormals bitflags pf.smoothingGroup pf.elementVertices vMap faceVertices idx [] faceIndices
+                buildTexturedFaceVertices frame vertexData remainingPendingFaces weightedNormals bitflags pf.smoothingGroup pf.elementVertices vMap outFaceVertices outIdx [] outFaceIndices
 
 
 buildTexturedFaceVertices :
@@ -739,15 +739,15 @@ buildTexturedFaceVertices :
     -> List Int
     -> List ( Int, Int, Int )
     -> ( List (TexturedFace coordinates), List ( Int, Int, Int ) )
-buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup elementVertices vMap faceVertices idx indices faceIndices =
+buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup elementVertices vMap outFaceVertices outIdx outIndices outFaceIndices =
     case elementVertices of
         [] ->
-            case indices of
+            case outIndices of
                 i1 :: remainingIndices ->
-                    generateTexturedFacesNormals frame vertexData pendingFaces vMap faceVertices idx (groupIndices i1 remainingIndices faceIndices) weightedNormals bitflags
+                    generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx (groupIndices i1 remainingIndices outFaceIndices) weightedNormals bitflags
 
                 [] ->
-                    generateTexturedFacesNormals frame vertexData pendingFaces vMap faceVertices idx faceIndices weightedNormals bitflags
+                    generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
         { p, uv } :: remainingElementVertices ->
             let
@@ -760,7 +760,7 @@ buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags
                             -1
             in
             if existingIdx > -1 then
-                buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx (existingIdx :: indices) faceIndices
+                buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx (existingIdx :: outIndices) outFaceIndices
 
             else
                 case lookupNormal bitflags p smoothingGroup weightedNormals of
@@ -781,10 +781,10 @@ buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags
                                                 -- so we always prepend a fresh triple; never overwrite an existing entry.
                                                 (case Dict.get p vMap of
                                                     Just entries ->
-                                                        smoothingGroup :: uv :: idx :: entries
+                                                        smoothingGroup :: uv :: outIdx :: entries
 
                                                     Nothing ->
-                                                        [ smoothingGroup, uv, idx ]
+                                                        [ smoothingGroup, uv, outIdx ]
                                                 )
                                                 vMap
                                             )
@@ -794,23 +794,23 @@ buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags
                                              , normal = Vector3d.placeIn frame (Vector3d.normalize normal)
                                              , uv = uvCoord
                                              }
-                                                :: faceVertices
+                                                :: outFaceVertices
                                             )
-                                            (idx + 1)
-                                            (idx :: indices)
-                                            faceIndices
+                                            (outIdx + 1)
+                                            (outIdx :: outIndices)
+                                            outFaceIndices
 
                                     Nothing ->
-                                        buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx indices faceIndices
+                                        buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
 
                             Nothing ->
-                                buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx indices faceIndices
+                                buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
 
                     Nothing ->
-                        buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap faceVertices idx indices faceIndices
+                        buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
 
 
-{-| Vertices are accumulated in reverse order.
+{-| outFaceVertices is accumulated in reverse order.
 -}
 flatTexturedFacesNormals :
     List Vertex
@@ -830,10 +830,10 @@ flatTexturedFacesNormals :
     -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
     -> Bool
     -> ( List (TexturedFace coordinates), List ( Int, Int, Int ) )
-flatTexturedFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap faceVertices accIdx faceIndices weightedNormals bitflags =
+flatTexturedFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags =
     case elementVertices of
         [] ->
-            generateTexturedFacesNormals frame vertexData pendingFaces vMap faceVertices accIdx faceIndices weightedNormals bitflags
+            generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
         vN :: remainingElementVertices ->
             case Array.get vN.p vertexData.positions of
@@ -869,18 +869,18 @@ flatTexturedFacesNormals elementVertices pendingFaces frame vertexData pos0InFra
                                 ({ position = pos0InFrame, normal = normal, uv = uv0 }
                                     :: { position = prevPosInFrame, normal = normal, uv = prevUV }
                                     :: { position = posNInFrame, normal = normal, uv = uvN }
-                                    :: faceVertices
+                                    :: outFaceVertices
                                 )
-                                (accIdx + 3)
-                                (( accIdx, accIdx + 1, accIdx + 2 ) :: faceIndices)
+                                (outIdx + 3)
+                                (( outIdx, outIdx + 1, outIdx + 2 ) :: outFaceIndices)
                                 weightedNormals
                                 bitflags
 
                         Nothing ->
-                            flatTexturedFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap faceVertices accIdx faceIndices weightedNormals bitflags
+                            flatTexturedFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
                 Nothing ->
-                    flatTexturedFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap faceVertices accIdx faceIndices weightedNormals bitflags
+                    flatTexturedFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
 
 smoothingGroupsSet : List Group -> Set Int
@@ -894,17 +894,17 @@ smoothingGroupsMask groups =
 
 
 smoothingGroupsHelp : List Group -> List Int -> List Int
-smoothingGroupsHelp groups smoothingGroups =
+smoothingGroupsHelp groups outSmoothingGroups =
     case groups of
         [] ->
-            smoothingGroups
+            outSmoothingGroups
 
         (Group record _ _ _) :: rest ->
             if record.smoothingGroup == 0 then
-                smoothingGroupsHelp rest smoothingGroups
+                smoothingGroupsHelp rest outSmoothingGroups
 
             else
-                smoothingGroupsHelp rest (record.smoothingGroup :: smoothingGroups)
+                smoothingGroupsHelp rest (record.smoothingGroup :: outSmoothingGroups)
 
 
 {-| Accumulate area-weighted normals for the smoothing-group reconstruction pass.
@@ -931,20 +931,20 @@ collectBitflagWeightedNormals vertexData groups weightedNormals allBits =
 
 
 collectWeightedNormalsHelp : (Int -> Bool) -> VertexData -> List Group -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-collectWeightedNormalsHelp matches vertexData groups weightedNormals =
+collectWeightedNormalsHelp matches vertexData groups outWeightedNormals =
     case groups of
         [] ->
-            weightedNormals
+            outWeightedNormals
 
         (Group { smoothingGroup } faceElements _ _) :: remainingGroups ->
             if matches smoothingGroup then
                 collectWeightedNormalsHelp matches
                     vertexData
                     remainingGroups
-                    (collectWeightedNormalsFaces vertexData smoothingGroup faceElements weightedNormals)
+                    (collectWeightedNormalsFaces vertexData smoothingGroup faceElements outWeightedNormals)
 
             else
-                collectWeightedNormalsHelp matches vertexData remainingGroups weightedNormals
+                collectWeightedNormalsHelp matches vertexData remainingGroups outWeightedNormals
 
 
 {-| Sum the area-weighted cross products of all fan triangles for a polygon.
@@ -1019,10 +1019,10 @@ polygonFanNormal vertexData p0 elementVertices normal =
 
 
 collectWeightedNormalsFaces : VertexData -> Int -> List FaceElement -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-collectWeightedNormalsFaces vertexData smoothingGroup faceElements weightedNormals =
+collectWeightedNormalsFaces vertexData smoothingGroup faceElements outWeightedNormals =
     case faceElements of
         [] ->
-            weightedNormals
+            outWeightedNormals
 
         (FaceElement _ _ ((v0 :: ((_ :: _ :: _) as remainingElementVertices)) as elementVertices)) :: remainingFaceElements ->
             case Array.get v0.p vertexData.positions of
@@ -1034,13 +1034,13 @@ collectWeightedNormalsFaces vertexData smoothingGroup faceElements weightedNorma
                     collectWeightedNormalsFaces vertexData
                         smoothingGroup
                         remainingFaceElements
-                        (collectWeightedNormalsVertices smoothingGroup normal elementVertices weightedNormals)
+                        (collectWeightedNormalsVertices smoothingGroup normal elementVertices outWeightedNormals)
 
                 Nothing ->
-                    collectWeightedNormalsFaces vertexData smoothingGroup remainingFaceElements weightedNormals
+                    collectWeightedNormalsFaces vertexData smoothingGroup remainingFaceElements outWeightedNormals
 
         (FaceElement _ _ _) :: remainingFaceElements ->
-            collectWeightedNormalsFaces vertexData smoothingGroup remainingFaceElements weightedNormals
+            collectWeightedNormalsFaces vertexData smoothingGroup remainingFaceElements outWeightedNormals
 
 
 lookupNormal : Bool -> Int -> Int -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Maybe (Vector3d Unitless ObjCoordinates)
@@ -1054,10 +1054,10 @@ lookupNormal bitflags p smoothingGroup weightedNormals =
 
 
 lookupNormalHelp : Bool -> Int -> List ( Int, Vector3d Unitless ObjCoordinates ) -> Maybe (Vector3d Unitless ObjCoordinates) -> Maybe (Vector3d Unitless ObjCoordinates)
-lookupNormalHelp bitflags smoothingGroup entries maybeNormal =
+lookupNormalHelp bitflags smoothingGroup entries outNormal =
     case entries of
         [] ->
-            maybeNormal
+            outNormal
 
         ( s, v ) :: remainingEntries ->
             let
@@ -1072,7 +1072,7 @@ lookupNormalHelp bitflags smoothingGroup entries maybeNormal =
                 smoothingGroup
                 remainingEntries
                 (if matches then
-                    case maybeNormal of
+                    case outNormal of
                         Nothing ->
                             Just v
 
@@ -1080,7 +1080,7 @@ lookupNormalHelp bitflags smoothingGroup entries maybeNormal =
                             Just (Vector3d.plus existing v)
 
                  else
-                    maybeNormal
+                    outNormal
                 )
 
 
@@ -1105,10 +1105,10 @@ addNormal smoothingGroup normal entries outEntries =
 
 
 collectWeightedNormalsVertices : Int -> Vector3d Unitless ObjCoordinates -> List Vertex -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-collectWeightedNormalsVertices smoothingGroup normal elementVertices weightedNormals =
+collectWeightedNormalsVertices smoothingGroup normal elementVertices outWeightedNormals =
     case elementVertices of
         [] ->
-            weightedNormals
+            outWeightedNormals
 
         v :: remainingElementVertices ->
             -- Key by position: v.p alone is sufficient when each position belongs to one group,
@@ -1118,14 +1118,14 @@ collectWeightedNormalsVertices smoothingGroup normal elementVertices weightedNor
                 normal
                 remainingElementVertices
                 (Dict.insert v.p
-                    (case Dict.get v.p weightedNormals of
+                    (case Dict.get v.p outWeightedNormals of
                         Just entries ->
                             addNormal smoothingGroup normal entries []
 
                         Nothing ->
                             [ ( smoothingGroup, normal ) ]
                     )
-                    weightedNormals
+                    outWeightedNormals
                 )
 
 
