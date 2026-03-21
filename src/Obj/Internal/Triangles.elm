@@ -55,7 +55,7 @@ texturedTriangles frame vertexData filters groups =
 type alias IndexedTriangles a =
     { maxIndex : Int
     , indexMap : Array (List Int)
-    , vertices : List a
+    , faceVertices : List a
     , faceIndices : List ( Int, Int, Int )
     }
 
@@ -73,26 +73,26 @@ type alias AddIndexedTriangles a =
 
 
 triangularMesh : AddIndexedTriangles a -> List String -> List Group -> Int -> Array (List Int) -> List a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
-triangularMesh add filters groups maxIndex indexMap vertices faceIndices =
+triangularMesh add filters groups maxIndex indexMap outVertices outFaceIndices =
     case groups of
-        (Group _ ((FaceElement lineno _ elementVertices) :: faceElements) _ _) :: remainingElementGroups ->
-            case add lineno elementVertices faceElements maxIndex indexMap vertices [] faceIndices of
+        (Group _ ((FaceElement lineno _ elementVertices) :: remainingFaceElements) _ _) :: remainingElementGroups ->
+            case add lineno elementVertices remainingFaceElements maxIndex indexMap outVertices [] outFaceIndices of
                 Ok newState ->
-                    triangularMesh add filters remainingElementGroups newState.maxIndex newState.indexMap newState.vertices newState.faceIndices
+                    triangularMesh add filters remainingElementGroups newState.maxIndex newState.indexMap newState.faceVertices newState.faceIndices
 
                 Err error ->
                     Err error
 
         (Group _ [] _ _) :: remainingElementGroups ->
             -- skip an empty group
-            triangularMesh add filters remainingElementGroups maxIndex indexMap vertices faceIndices
+            triangularMesh add filters remainingElementGroups maxIndex indexMap outVertices outFaceIndices
 
         [] ->
-            buildMeshResult filters (Array.fromList (List.reverse vertices)) faceIndices
+            buildMeshResult filters (Array.fromList (List.reverse outVertices)) outFaceIndices
 
 
 addTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles (Point3d Meters coordinates)
-addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices =
     case elementVertices of
         { p } :: remainingVertices ->
             case Array.get p indexMap of
@@ -104,9 +104,9 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
                         elements
                         maxIndex
                         indexMap
-                        vertices
-                        (idx :: indices)
-                        faceIndices
+                        outVertices
+                        (idx :: outIndices)
+                        outFaceIndices
 
                 _ ->
                     case Array.get p vertexData.positions of
@@ -118,9 +118,9 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
                                 elements
                                 (maxIndex + 1)
                                 (Array.set p [ maxIndex + 1 ] indexMap)
-                                (Point3d.placeIn frame vertex :: vertices)
-                                (maxIndex + 1 :: indices)
-                                faceIndices
+                                (Point3d.placeIn frame vertex :: outVertices)
+                                (maxIndex + 1 :: outIndices)
+                                outFaceIndices
 
                         Nothing ->
                             formatError lineno "Index out of range"
@@ -128,13 +128,13 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
         [] ->
             let
                 newFaceIndices =
-                    case indices of
+                    case outIndices of
                         p1 :: remainingIndices ->
                             -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
+                            groupIndices p1 remainingIndices outFaceIndices
 
                         [] ->
-                            faceIndices
+                            outFaceIndices
             in
             case elements of
                 (FaceElement newLineno _ newElementVertices) :: remainingElements ->
@@ -145,7 +145,7 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
                         remainingElements
                         maxIndex
                         indexMap
-                        vertices
+                        outVertices
                         []
                         newFaceIndices
 
@@ -153,13 +153,13 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
                     Ok
                         { maxIndex = maxIndex
                         , indexMap = indexMap
-                        , vertices = vertices
+                        , faceVertices = outVertices
                         , faceIndices = newFaceIndices
                         }
 
 
 addTexturedTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles { position : Point3d Meters coordinates, uv : ( Float, Float ) }
-addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex indexMap vertices indices faceIndices =
+addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices =
     case elementVertices of
         { p, uv } :: remainingVertices ->
             if uv > -1 then
@@ -183,9 +183,9 @@ addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex i
                         elements
                         maxIndex
                         indexMap
-                        vertices
-                        (idx :: indices)
-                        faceIndices
+                        outVertices
+                        (idx :: outIndices)
+                        outFaceIndices
 
                 else
                     case Array.get p vertexData.positions of
@@ -202,10 +202,10 @@ addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex i
                                         ({ position = Point3d.placeIn frame position
                                          , uv = uvCoord
                                          }
-                                            :: vertices
+                                            :: outVertices
                                         )
-                                        (maxIndex + 1 :: indices)
-                                        faceIndices
+                                        (maxIndex + 1 :: outIndices)
+                                        outFaceIndices
 
                                 Nothing ->
                                     formatError lineno "Index out of range"
@@ -219,13 +219,13 @@ addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex i
         [] ->
             let
                 newFaceIndices =
-                    case indices of
+                    case outIndices of
                         p1 :: remainingIndices ->
                             -- parser guarantees at least 3 face indices
-                            groupIndices p1 remainingIndices faceIndices
+                            groupIndices p1 remainingIndices outFaceIndices
 
                         [] ->
-                            faceIndices
+                            outFaceIndices
             in
             case elements of
                 (FaceElement newLineno _ newElementVertices) :: remainingElements ->
@@ -236,7 +236,7 @@ addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex i
                         remainingElements
                         maxIndex
                         indexMap
-                        vertices
+                        outVertices
                         []
                         newFaceIndices
 
@@ -244,6 +244,6 @@ addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex i
                     Ok
                         { maxIndex = maxIndex
                         , indexMap = indexMap
-                        , vertices = vertices
+                        , faceVertices = outVertices
                         , faceIndices = newFaceIndices
                         }

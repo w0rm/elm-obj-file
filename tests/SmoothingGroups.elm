@@ -6,6 +6,7 @@ module SmoothingGroups exposing
 
 import Array
 import Expect
+import Frame3d
 import Length
 import Obj.Decode as Decode
 import Quantity exposing (Quantity(..))
@@ -197,6 +198,35 @@ faces =
                             )
                         )
                     |> Expect.equal (Ok ( 6, 2 ))
+        , Test.test "bitflag: overlapping groups (s 3 and s 6 share bit 2) blend normals from both faces" <|
+            \_ ->
+                -- s 3 (011) triangle lies in the XY plane → face normal +Z.
+                -- s 6 (110) triangle lies in the XZ plane → face normal +Y.
+                -- 3 & 6 = 2 /= 0, so positions on the shared edge (v1, v2) accumulate normals
+                -- from both groups; lookupNormalBitflag sums the +Z entry (sg=3) and the +Y
+                -- entry (sg=6). Positions v1 and v2 are each emitted twice (once per group,
+                -- no dedup since sg differs), giving 4 blended vertices with both Y > 0 and
+                -- Z > 0. The remaining 2 (v3 pure +Z, v4 pure +Y) are not blended.
+                bitflagOverlapObj
+                    |> Decode.decodeString Length.centimeters (Decode.bitflagFacesIn Frame3d.atOrigin)
+                    |> Result.map
+                        (\mesh ->
+                            TriangularMesh.vertices mesh
+                                |> Array.toList
+                                |> List.filter
+                                    (\v ->
+                                        let
+                                            (Quantity y) =
+                                                Vector3d.yComponent v.normal
+
+                                            (Quantity z) =
+                                                Vector3d.zComponent v.normal
+                                        in
+                                        y > 0 && z > 0
+                                    )
+                                |> List.length
+                        )
+                    |> Expect.equal (Ok 4)
         ]
 
 
@@ -623,6 +653,29 @@ v 1 1 0
 v 0 1 0
 s off
 f 1 2 3 4"""
+
+
+{-| Two triangles with overlapping bitflag smoothing groups.
+
+Triangle 1 (s 3 = 011) lies in the XY plane → face normal +Z.
+Triangle 2 (s 6 = 110) lies in the XZ plane → face normal +Y.
+
+Since 3 & 6 = 2 /= 0, positions on the shared edge (v1, v2) accumulate normals
+from both groups. lookupNormalBitflag sums them at lookup time. v1 and v2 are
+each emitted twice (once per group), giving 4 blended vertices. v3 (only in
+face 1) gets pure +Z and v4 (only in face 2) gets pure +Y.
+
+-}
+bitflagOverlapObj : String
+bitflagOverlapObj =
+    """v 0 0 0
+v 1 0 0
+v 0 1 0
+v 0 0 1
+s 3
+f 1 2 3
+s 6
+f 1 4 2"""
 
 
 {-| Single quad on XY plane, s off, with UV coordinates, no explicit normals.
