@@ -14,7 +14,6 @@ import Obj.Internal.Parse
     exposing
         ( FaceElement(..)
         , Group(..)
-        , ObjCoordinates
         , Vertex
         , VertexData
         , formatError
@@ -56,9 +55,9 @@ Deferred path (some faces need normals reconstructed):
 
 -}
 faces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
+    Frame3d Meters coordinates { defines : objCoordinates }
     -> Bool
-    -> VertexData
+    -> VertexData objCoordinates
     -> List String
     -> List Group
     -> Result String (TriangularMesh (Face coordinates))
@@ -97,9 +96,9 @@ faces frame bitflags vertexData filters filteredGroups =
 
 
 texturedFaces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
+    Frame3d Meters coordinates { defines : objCoordinates }
     -> Bool
-    -> VertexData
+    -> VertexData objCoordinates
     -> List String
     -> List Group
     -> Result String (TriangularMesh (TexturedFace coordinates))
@@ -167,9 +166,9 @@ Deferred path (some faces need normals reconstructed):
 
 -}
 bumpyFaces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
+    Frame3d Meters coordinates { defines : objCoordinates }
     -> Bool
-    -> VertexData
+    -> VertexData objCoordinates
     -> List String
     -> List Group
     -> Result String (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ), tangent : Vector3d Unitless coordinates, tangentBasisIsRightHanded : Bool })
@@ -310,7 +309,7 @@ Note: the dedup key is `(n)` alone via `lookup1` (no UV component), and the
 indexMap stores `(n, vertexIdx)` pairs rather than triples.
 
 -}
-addFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (Face coordinates) Key2
+addFaces : Frame3d Meters coordinates { defines : objCoordinates } -> VertexData objCoordinates -> AddIndexedFaces (Face coordinates) Key2
 addFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices outFlatPendingFaces outSmoothPendingFaces =
     case elementVertices of
         { p, n } :: remainingVertices ->
@@ -411,7 +410,7 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
                     Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = outVertices, faceIndices = newFaceIndices, flatPendingFaces = outFlatPendingFaces, smoothPendingFaces = outSmoothPendingFaces }
 
 
-addTexturedFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (TexturedFace coordinates) Key3
+addTexturedFaces : Frame3d Meters coordinates { defines : objCoordinates } -> VertexData objCoordinates -> AddIndexedFaces (TexturedFace coordinates) Key3
 addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices outFlatPendingFaces outSmoothPendingFaces =
     case elementVertices of
         { p, uv, n } :: remainingVertices ->
@@ -529,9 +528,9 @@ When `elementVertices` is exhausted the next pending face is started inline.
 
 -}
 addSmoothFaces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
-    -> SmoothNormals
+    Frame3d Meters coordinates { defines : objCoordinates }
+    -> VertexData objCoordinates
+    -> SmoothNormals objCoordinates
     -> Int
     -> List Vertex
     -> List ( Int, FaceElement )
@@ -605,9 +604,9 @@ Analogous to `addFacesWithNormals` but for `TexturedFace`. Deduplicates on
 
 -}
 addSmoothTexturedFaces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
-    -> SmoothNormals
+    Frame3d Meters coordinates { defines : objCoordinates }
+    -> VertexData objCoordinates
+    -> SmoothNormals objCoordinates
     -> Int
     -> List Vertex
     -> List ( Int, FaceElement )
@@ -695,8 +694,8 @@ Call with `[] flatPendingFaces Point3d.origin Point3d.origin` to start.
 
 -}
 addFlatFaces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
+    Frame3d Meters coordinates { defines : objCoordinates }
+    -> VertexData objCoordinates
     -> List Vertex
     -> List FaceElement
     -> Point3d Meters coordinates
@@ -772,8 +771,8 @@ to start.
 
 -}
 addFlatTexturedFaces :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
+    Frame3d Meters coordinates { defines : objCoordinates }
+    -> VertexData objCoordinates
     -> List Vertex
     -> List FaceElement
     -> Point3d Meters coordinates

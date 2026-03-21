@@ -12,7 +12,6 @@ import Obj.Internal.Parse
     exposing
         ( FaceElement(..)
         , Group(..)
-        , ObjCoordinates
         , Vertex
         )
 import Point3d exposing (Point3d)
@@ -21,11 +20,11 @@ import Set
 import Vector3d exposing (Vector3d)
 
 
-type SmoothNormals
-    = SmoothNormals (Int -> List ( Int, Vector3d Unitless ObjCoordinates ) -> Maybe (Vector3d Unitless ObjCoordinates) -> Maybe (Vector3d Unitless ObjCoordinates)) (Array (List ( Int, Vector3d Unitless ObjCoordinates )))
+type SmoothNormals coordinates
+    = SmoothNormals (Int -> List ( Int, Vector3d Unitless coordinates ) -> Maybe (Vector3d Unitless coordinates) -> Maybe (Vector3d Unitless coordinates)) (Array (List ( Int, Vector3d Unitless coordinates )))
 
 
-exact : Array (Point3d Meters ObjCoordinates) -> List Group -> SmoothNormals
+exact : Array (Point3d Meters coordinates) -> List Group -> SmoothNormals coordinates
 exact positions groups =
     let
         smoothingGroupsSet =
@@ -34,7 +33,7 @@ exact positions groups =
     SmoothNormals getExact (collectSmoothNormalsHelp (\smoothingGroup -> Set.member smoothingGroup smoothingGroupsSet) positions groups (Array.repeat (Array.length positions) []))
 
 
-bitflag : Array (Point3d Meters ObjCoordinates) -> List Group -> SmoothNormals
+bitflag : Array (Point3d Meters coordinates) -> List Group -> SmoothNormals coordinates
 bitflag positions groups =
     let
         allBits =
@@ -57,7 +56,7 @@ smoothingGroupsHelp groups outSmoothingGroups =
                 smoothingGroupsHelp remainingGroups (record.smoothingGroup :: outSmoothingGroups)
 
 
-collectSmoothNormalsHelp : (Int -> Bool) -> Array (Point3d Meters ObjCoordinates) -> List Group -> Array (List ( Int, Vector3d Unitless ObjCoordinates )) -> Array (List ( Int, Vector3d Unitless ObjCoordinates ))
+collectSmoothNormalsHelp : (Int -> Bool) -> Array (Point3d Meters coordinates) -> List Group -> Array (List ( Int, Vector3d Unitless coordinates )) -> Array (List ( Int, Vector3d Unitless coordinates ))
 collectSmoothNormalsHelp matches positions groups outSmoothNormals =
     case groups of
         [] ->
@@ -87,12 +86,12 @@ triangles still contribute their area.
 
 -}
 polygonFanNormal :
-    Array (Point3d Meters ObjCoordinates)
+    Array (Point3d Meters coordinates)
     -> { x : Float, y : Float, z : Float }
     -> { x : Float, y : Float, z : Float }
     -> List Vertex
-    -> Vector3d Unitless ObjCoordinates
-    -> Vector3d Unitless ObjCoordinates
+    -> Vector3d Unitless coordinates
+    -> Vector3d Unitless coordinates
 polygonFanNormal positions p0 prevPos elementVertices normal =
     case elementVertices of
         vB :: remainingElementVertices ->
@@ -139,7 +138,7 @@ polygonFanNormal positions p0 prevPos elementVertices normal =
             normal
 
 
-collectSmoothNormalsFaces : Array (Point3d Meters ObjCoordinates) -> Int -> List FaceElement -> Array (List ( Int, Vector3d Unitless ObjCoordinates )) -> Array (List ( Int, Vector3d Unitless ObjCoordinates ))
+collectSmoothNormalsFaces : Array (Point3d Meters coordinates) -> Int -> List FaceElement -> Array (List ( Int, Vector3d Unitless coordinates )) -> Array (List ( Int, Vector3d Unitless coordinates ))
 collectSmoothNormalsFaces positions smoothingGroup faceElements outSmoothNormals =
     case faceElements of
         [] ->
@@ -169,7 +168,7 @@ collectSmoothNormalsFaces positions smoothingGroup faceElements outSmoothNormals
             collectSmoothNormalsFaces positions smoothingGroup remainingFaceElements outSmoothNormals
 
 
-get : Int -> Int -> SmoothNormals -> Maybe (Vector3d Unitless ObjCoordinates)
+get : Int -> Int -> SmoothNormals coordinates -> Maybe (Vector3d Unitless coordinates)
 get p smoothingGroup (SmoothNormals lookup arr) =
     case Array.get p arr of
         Nothing ->
@@ -179,7 +178,7 @@ get p smoothingGroup (SmoothNormals lookup arr) =
             lookup smoothingGroup entries Nothing
 
 
-getExact : Int -> List ( Int, Vector3d Unitless ObjCoordinates ) -> Maybe (Vector3d Unitless ObjCoordinates) -> Maybe (Vector3d Unitless ObjCoordinates)
+getExact : Int -> List ( Int, Vector3d Unitless coordinates ) -> Maybe (Vector3d Unitless coordinates) -> Maybe (Vector3d Unitless coordinates)
 getExact smoothingGroup entries _ =
     case entries of
         [] ->
@@ -200,7 +199,7 @@ here. `addNormal` only merges entries with the _exact same_ group integer, so
 groups 1 and 2 remain separate in the dict and the summation happens at lookup
 time.
 -}
-getBitflag : Int -> List ( Int, Vector3d Unitless ObjCoordinates ) -> Maybe (Vector3d Unitless ObjCoordinates) -> Maybe (Vector3d Unitless ObjCoordinates)
+getBitflag : Int -> List ( Int, Vector3d Unitless coordinates ) -> Maybe (Vector3d Unitless coordinates) -> Maybe (Vector3d Unitless coordinates)
 getBitflag smoothingGroup entries outNormal =
     case entries of
         [] ->
@@ -231,7 +230,7 @@ getBitflag smoothingGroup entries outNormal =
 {-| Add `normal` to the entry for `smoothingGroup` in `entries`, or prepend a new entry if none exists.
 Order within the list is not significant; `get` scans the whole list.
 -}
-addNormal : Int -> Vector3d Unitless ObjCoordinates -> List ( Int, Vector3d Unitless ObjCoordinates ) -> List ( Int, Vector3d Unitless ObjCoordinates ) -> List ( Int, Vector3d Unitless ObjCoordinates )
+addNormal : Int -> Vector3d Unitless coordinates -> List ( Int, Vector3d Unitless coordinates ) -> List ( Int, Vector3d Unitless coordinates ) -> List ( Int, Vector3d Unitless coordinates )
 addNormal smoothingGroup normal entries outEntries =
     case entries of
         [] ->
@@ -248,7 +247,7 @@ addNormal smoothingGroup normal entries outEntries =
                 addNormal smoothingGroup normal remainingEntries (currentEntry :: outEntries)
 
 
-collectSmoothNormalsVertices : Int -> Vector3d Unitless ObjCoordinates -> List Vertex -> Array (List ( Int, Vector3d Unitless ObjCoordinates )) -> Array (List ( Int, Vector3d Unitless ObjCoordinates ))
+collectSmoothNormalsVertices : Int -> Vector3d Unitless coordinates -> List Vertex -> Array (List ( Int, Vector3d Unitless coordinates )) -> Array (List ( Int, Vector3d Unitless coordinates ))
 collectSmoothNormalsVertices smoothingGroup normal elementVertices outSmoothNormals =
     case elementVertices of
         [] ->

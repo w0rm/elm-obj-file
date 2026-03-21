@@ -12,7 +12,6 @@ import Obj.Internal.Parse
     exposing
         ( FaceElement(..)
         , Group(..)
-        , ObjCoordinates
         , Vertex
         , VertexData
         , formatError
@@ -22,8 +21,8 @@ import TriangularMesh exposing (TriangularMesh)
 
 
 triangles :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
+    Frame3d Meters coordinates { defines : objCoordinates }
+    -> VertexData objCoordinates
     -> List String
     -> List Group
     -> Result String (TriangularMesh (Point3d Meters coordinates))
@@ -38,8 +37,8 @@ triangles frame vertexData filters groups =
 
 
 texturedTriangles :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
+    Frame3d Meters coordinates { defines : objCoordinates }
+    -> VertexData objCoordinates
     -> List String
     -> List Group
     -> Result String (TriangularMesh { position : Point3d Meters coordinates, uv : ( Float, Float ) })
@@ -92,7 +91,7 @@ triangularMesh add filters groups maxIndex indexMap outVertices outFaceIndices =
             buildMeshResult filters (Array.fromList (List.reverse outVertices)) outFaceIndices
 
 
-addTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles (Point3d Meters coordinates) Key1
+addTriangles : Frame3d Meters coordinates { defines : objCoordinates } -> VertexData objCoordinates -> AddIndexedTriangles (Point3d Meters coordinates) Key1
 addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices =
     case elementVertices of
         { p } :: remainingVertices ->
@@ -162,7 +161,7 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
                         }
 
 
-addTexturedTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles { position : Point3d Meters coordinates, uv : ( Float, Float ) } Key2
+addTexturedTriangles : Frame3d Meters coordinates { defines : objCoordinates } -> VertexData objCoordinates -> AddIndexedTriangles { position : Point3d Meters coordinates, uv : ( Float, Float ) } Key2
 addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices =
     case elementVertices of
         { p, uv } :: remainingVertices ->

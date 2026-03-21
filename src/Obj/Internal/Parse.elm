@@ -2,7 +2,6 @@ module Obj.Internal.Parse exposing
     ( FaceElement(..)
     , Group(..)
     , LineElement(..)
-    , ObjCoordinates
     , PointsElement(..)
     , Vertex
     , VertexData
@@ -17,13 +16,9 @@ import Obj.Internal.IndexMap as IndexMap exposing (Empty, IndexMap)
 import Point3d exposing (Point3d)
 
 
-type ObjCoordinates
-    = ObjCoordinates Never
-
-
-type alias VertexData =
-    { positions : Array (Point3d Meters ObjCoordinates)
-    , normals : Array (Direction3d ObjCoordinates)
+type alias VertexData coordinates =
+    { positions : Array (Point3d Meters coordinates)
+    , normals : Array (Direction3d coordinates)
     , uvs : Array ( Float, Float )
     , emptyIndexMap : IndexMap Empty
     , fullGroups : List Group
@@ -66,7 +61,7 @@ formatError lineno error =
     Err ("Line " ++ String.fromInt lineno ++ ": " ++ error)
 
 
-parse : (Float -> Float) -> String -> Result String ( VertexData, List Group )
+parse : (Float -> Float) -> String -> Result String ( VertexData coordinates, List Group )
 parse units content =
     parseHelp units (String.lines content) 1 [] [] [] [] Nothing Nothing [ "default" ] [] [] [] 0
 
@@ -75,8 +70,8 @@ parseHelp :
     (Float -> Float)
     -> List String
     -> Int
-    -> List (Point3d Meters ObjCoordinates)
-    -> List (Direction3d.Direction3d ObjCoordinates)
+    -> List (Point3d Meters coordinates)
+    -> List (Direction3d.Direction3d coordinates)
     -> List ( Float, Float )
     -> List Group
     -> Maybe String
@@ -86,7 +81,7 @@ parseHelp :
     -> List LineElement
     -> List PointsElement
     -> Int
-    -> Result String ( VertexData, List Group )
+    -> Result String ( VertexData coordinates, List Group )
 parseHelp units lines lineno positions normals uvs groups object_ material_ groups_ faceElements lineElements pointsElements currentSmoothingGroup =
     case lines of
         line :: remainingLines ->
@@ -292,7 +287,7 @@ skipCommands =
     ]
 
 
-parsePositions : (Float -> Float) -> Int -> List String -> List (Point3d Meters ObjCoordinates) -> Result String ( Int, List String, List (Point3d Meters ObjCoordinates) )
+parsePositions : (Float -> Float) -> Int -> List String -> List (Point3d Meters coordinates) -> Result String ( Int, List String, List (Point3d Meters coordinates) )
 parsePositions units lineno lines positions =
     case lines of
         line :: remainingLines ->
@@ -381,7 +376,7 @@ parseUvs lineno lines uvs =
             Ok ( lineno, lines, uvs )
 
 
-parseNormals : Int -> List String -> List (Direction3d.Direction3d ObjCoordinates) -> Result String ( Int, List String, List (Direction3d.Direction3d ObjCoordinates) )
+parseNormals : Int -> List String -> List (Direction3d.Direction3d coordinates) -> Result String ( Int, List String, List (Direction3d.Direction3d coordinates) )
 parseNormals lineno lines normals =
     case lines of
         line :: remainingLines ->

@@ -89,7 +89,7 @@ import Frame3d exposing (Frame3d)
 import Http
 import Length exposing (Length, Meters)
 import Obj.Internal.Faces as Faces
-import Obj.Internal.Parse as Parse exposing (Group(..), LineElement(..), ObjCoordinates, PointsElement(..), Vertex, VertexData, formatError)
+import Obj.Internal.Parse as Parse exposing (Group(..), LineElement(..), PointsElement(..), Vertex, VertexData, formatError)
 import Obj.Internal.Triangles as Triangles
 import Point3d exposing (Point3d)
 import Polyline3d exposing (Polyline3d)
@@ -103,7 +103,7 @@ import Vector3d exposing (Vector3d)
 [the OBJ file format](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
 -}
 type Decoder a
-    = Decoder (VertexData -> List String -> List Group -> Result String a)
+    = Decoder (VertexData ObjCoordinates -> List String -> List Group -> Result String a)
 
 
 {-| Decode just the plain positions. Use with `Scene3d.Mesh.indexedTriangles` and `Scene3d.Mesh.indexedFacets` from elm-3d-scene.
@@ -467,7 +467,7 @@ oneOf decoders =
         )
 
 
-oneOfHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List String -> Result String a
+oneOfHelp : VertexData ObjCoordinates -> List String -> List Group -> List (Decoder a) -> List String -> Result String a
 oneOfHelp vertexData filters elements decoders errors =
     case decoders of
         (Decoder decoder) :: remainingDecoders ->
@@ -551,7 +551,7 @@ combine decoders =
         )
 
 
-combineHelp : VertexData -> List String -> List Group -> List (Decoder a) -> List a -> Result String (List a)
+combineHelp : VertexData ObjCoordinates -> List String -> List Group -> List (Decoder a) -> List a -> Result String (List a)
 combineHelp vertexData filters elements decoders list =
     case decoders of
         (Decoder decoder) :: remainingDecoders ->
@@ -568,8 +568,8 @@ combineHelp vertexData filters elements decoders list =
 
 {-| Coordinate system for decoded meshes.
 -}
-type alias ObjCoordinates =
-    Parse.ObjCoordinates
+type ObjCoordinates
+    = ObjCoordinates Never
 
 
 {-| Transform coordinates when decoding. For example, if you need to render a mesh with Z-up,
