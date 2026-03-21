@@ -136,6 +136,41 @@ faces =
                             )
                         )
                     |> Expect.equal (Ok ( 6, 2 ))
+        , Test.test "s off: quad split into two triangles have consistent geometric winding" <|
+            \_ ->
+                -- The bug swapped pos0/posN in the recursive call of flatFacesNormals,
+                -- reversing the winding of every triangle after the first in a polygon.
+                -- Stored normals are reused from the first triangle so they don't catch it;
+                -- instead, compute the geometric face normal from vertex positions and check
+                -- that all faces are wound the same way (same Z sign).
+                xyPlaneQuadObj
+                    |> Decode.decodeString Length.centimeters Decode.faces
+                    |> Result.map
+                        (\mesh ->
+                            let
+                                zSigns =
+                                    TriangularMesh.faceVertices mesh
+                                        |> List.map
+                                            (\( a, b, c ) ->
+                                                let
+                                                    (Quantity z) =
+                                                        Vector3d.zComponent
+                                                            (Vector3d.cross
+                                                                (Vector3d.from a.position b.position)
+                                                                (Vector3d.from a.position c.position)
+                                                            )
+                                                in
+                                                z > 0
+                                            )
+                            in
+                            case zSigns of
+                                first :: rest ->
+                                    List.all ((==) first) rest
+
+                                [] ->
+                                    False
+                        )
+                    |> Expect.equal (Ok True)
         , Test.test "bitflag: s 1 and s 2 (Blender bitflag export, all powers of 2) produce hard edge" <|
             \_ ->
                 -- s 1 (01) and s 2 (10) share no bits, so should split into 6 vertices.
@@ -574,6 +609,20 @@ vt 1 0
 vt 0 1
 s 1
 f 1/1 2/2 3/3"""
+
+
+{-| Single quad on XY plane, s off, no UV coordinates, no explicit normals.
+Quad (0,0,0),(1,0,0),(1,1,0),(0,1,0) is CCW when viewed from +Z.
+Fan triangulation produces two triangles; both must have +Z normals.
+-}
+xyPlaneQuadObj : String
+xyPlaneQuadObj =
+    """v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+s off
+f 1 2 3 4"""
 
 
 {-| Single quad on XY plane, s off, with UV coordinates, no explicit normals.

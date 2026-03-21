@@ -226,6 +226,14 @@ type alias PendingFace =
     { lineno : Int, smoothingGroup : Int, elementVertices : List Vertex }
 
 
+type alias FaceVerticesResult coordinates =
+    { faceVertices : List (Face coordinates)
+    , idx : Int
+    , faceIndices : List ( Int, Int, Int )
+    , vMap : Dict Int (List Int)
+    }
+
+
 {-| Shared group-level driver for `faces`, `texturedFaces`, and `bumpyFaces`
 passes.
 
@@ -507,8 +515,11 @@ generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx o
 
                                             pos1InFrame =
                                                 Point3d.placeIn frame pos1
+
+                                            ( newOutFaceVertices, newOutIdx, newOutFaceIndices ) =
+                                                flatFacesNormals remainingElementVertices frame vertexData pos0InFrame pos1InFrame outFaceVertices outIdx outFaceIndices
                                         in
-                                        flatFacesNormals remainingElementVertices remainingPendingFaces frame vertexData pos0InFrame pos1InFrame False Vector3d.zero vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+                                        generateFacesNormals frame vertexData remainingPendingFaces vMap newOutFaceVertices newOutIdx newOutFaceIndices weightedNormals bitflags
 
                                     Nothing ->
                                         generateFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
@@ -520,32 +531,35 @@ generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx o
                         generateFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
 
             else
-                buildFaceVertices frame vertexData remainingPendingFaces weightedNormals bitflags pf.smoothingGroup pf.elementVertices vMap outFaceVertices outIdx [] outFaceIndices
+                let
+                    r =
+                        buildFaceVertices weightedNormals bitflags pf.smoothingGroup pf.elementVertices frame vertexData vMap outFaceVertices outIdx [] outFaceIndices
+                in
+                generateFacesNormals frame vertexData remainingPendingFaces r.vMap r.faceVertices r.idx r.faceIndices weightedNormals bitflags
 
 
 buildFaceVertices :
-    Frame3d Meters coordinates { defines : ObjCoordinates }
-    -> VertexData
-    -> List PendingFace
-    -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
+    Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
     -> Bool
     -> Int
     -> List Vertex
+    -> Frame3d Meters coordinates { defines : ObjCoordinates }
+    -> VertexData
     -> Dict Int (List Int)
     -> List (Face coordinates)
     -> Int
     -> List Int
     -> List ( Int, Int, Int )
-    -> ( List (Face coordinates), List ( Int, Int, Int ) )
-buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup elementVertices vMap outFaceVertices outIdx outIndices outFaceIndices =
+    -> FaceVerticesResult coordinates
+buildFaceVertices weightedNormals bitflags smoothingGroup elementVertices frame vertexData vMap outFaceVertices outIdx outIndices outFaceIndices =
     case elementVertices of
         [] ->
             case outIndices of
                 i1 :: restIndices ->
-                    generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx (groupIndices i1 restIndices outFaceIndices) weightedNormals bitflags
+                    { faceVertices = outFaceVertices, idx = outIdx, faceIndices = groupIndices i1 restIndices outFaceIndices, vMap = vMap }
 
                 [] ->
-                    generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+                    { faceVertices = outFaceVertices, idx = outIdx, faceIndices = outFaceIndices, vMap = vMap }
 
         { p } :: remainingElementVertices ->
             let
@@ -558,20 +572,20 @@ buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothi
                             -1
             in
             if existingIdx > -1 then
-                buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx (existingIdx :: outIndices) outFaceIndices
+                buildFaceVertices weightedNormals bitflags smoothingGroup remainingElementVertices frame vertexData vMap outFaceVertices outIdx (existingIdx :: outIndices) outFaceIndices
 
             else
                 case lookupNormal bitflags p smoothingGroup weightedNormals of
                     Just normal ->
                         case Array.get p vertexData.positions of
                             Just position ->
-                                buildFaceVertices frame
-                                    vertexData
-                                    pendingFaces
+                                buildFaceVertices
                                     weightedNormals
                                     bitflags
                                     smoothingGroup
                                     remainingElementVertices
+                                    frame
+                                    vertexData
                                     (Dict.insert p
                                         -- (p, smoothingGroup) is guaranteed unique here (lookup1 returned -1 above),
                                         -- so we always prepend a fresh pair; never overwrite an existing entry.
@@ -596,34 +610,28 @@ buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothi
                                     outFaceIndices
 
                             Nothing ->
-                                buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
+                                buildFaceVertices weightedNormals bitflags smoothingGroup remainingElementVertices frame vertexData vMap outFaceVertices outIdx outIndices outFaceIndices
 
                     Nothing ->
-                        buildFaceVertices frame vertexData pendingFaces weightedNormals bitflags smoothingGroup remainingElementVertices vMap outFaceVertices outIdx outIndices outFaceIndices
+                        buildFaceVertices weightedNormals bitflags smoothingGroup remainingElementVertices frame vertexData vMap outFaceVertices outIdx outIndices outFaceIndices
 
 
 {-| outFaceVertices is accumulated in reverse order.
 -}
 flatFacesNormals :
     List Vertex
-    -> List PendingFace
     -> Frame3d Meters coordinates { defines : ObjCoordinates }
     -> VertexData
     -> Point3d Meters coordinates
     -> Point3d Meters coordinates
-    -> Bool
-    -> Vector3d Unitless coordinates
-    -> Dict Int (List Int)
     -> List (Face coordinates)
     -> Int
     -> List ( Int, Int, Int )
-    -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-    -> Bool
-    -> ( List (Face coordinates), List ( Int, Int, Int ) )
-flatFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags =
+    -> ( List (Face coordinates), Int, List ( Int, Int, Int ) )
+flatFacesNormals elementVertices frame vertexData pos0InFrame prevPosInFrame outFaceVertices outIdx outFaceIndices =
     case elementVertices of
         [] ->
-            generateFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+            ( outFaceVertices, outIdx, outFaceIndices )
 
         vN :: remainingElementVertices ->
             case Array.get vN.p vertexData.positions of
@@ -632,38 +640,28 @@ flatFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevP
                         posNInFrame =
                             Point3d.placeIn frame posN
 
-                        normal =
-                            if normalFound then
-                                normalInFrame
-
-                            else
-                                Vector3d.normalize
-                                    (Vector3d.cross
-                                        (Vector3d.from pos0InFrame prevPosInFrame)
-                                        (Vector3d.from pos0InFrame posNInFrame)
-                                    )
+                        triangleNormal =
+                            Vector3d.normalize
+                                (Vector3d.cross
+                                    (Vector3d.from pos0InFrame prevPosInFrame)
+                                    (Vector3d.from pos0InFrame posNInFrame)
+                                )
                     in
                     flatFacesNormals remainingElementVertices
-                        pendingFaces
                         frame
                         vertexData
-                        posNInFrame
                         pos0InFrame
-                        True
-                        normal
-                        vMap
-                        ({ position = pos0InFrame, normal = normal }
-                            :: { position = prevPosInFrame, normal = normal }
-                            :: { position = posNInFrame, normal = normal }
+                        posNInFrame
+                        ({ position = pos0InFrame, normal = triangleNormal }
+                            :: { position = prevPosInFrame, normal = triangleNormal }
+                            :: { position = posNInFrame, normal = triangleNormal }
                             :: outFaceVertices
                         )
                         (outIdx + 3)
                         (( outIdx, outIdx + 1, outIdx + 2 ) :: outFaceIndices)
-                        weightedNormals
-                        bitflags
 
                 Nothing ->
-                    flatFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+                    flatFacesNormals remainingElementVertices frame vertexData pos0InFrame prevPosInFrame outFaceVertices outIdx outFaceIndices
 
 
 {-| outFaceVertices is accumulated in reverse order.
@@ -688,7 +686,7 @@ generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices 
             if pf.smoothingGroup == 0 then
                 -- Flat shading: unshared vertices per face
                 case pf.elementVertices of
-                    v0 :: v1 :: remainingElementVertices ->
+                    v0 :: (v1 :: remainingElementVertices) ->
                         case Array.get v0.p vertexData.positions of
                             Just pos0 ->
                                 case Array.get v1.p vertexData.positions of
@@ -703,8 +701,17 @@ generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices 
 
                                                             pos1InFrame =
                                                                 Point3d.placeIn frame pos1
+
+                                                            faceNormal =
+                                                                Vector3d.normalize
+                                                                    (Vector3d.placeIn frame
+                                                                        (polygonFanNormal vertexData (Point3d.toMeters pos0) (Point3d.toMeters pos1) remainingElementVertices Vector3d.zero)
+                                                                    )
+
+                                                            ( newOutFaceVertices, newOutIdx, newOutFaceIndices ) =
+                                                                flatTexturedFacesNormals remainingElementVertices frame vertexData pos0InFrame pos1InFrame uv0 uv1 faceNormal outFaceVertices outIdx outFaceIndices
                                                         in
-                                                        flatTexturedFacesNormals remainingElementVertices remainingPendingFaces frame vertexData pos0InFrame pos1InFrame uv0 uv1 False Vector3d.zero vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+                                                        generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap newOutFaceVertices newOutIdx newOutFaceIndices weightedNormals bitflags
 
                                                     Nothing ->
                                                         generateTexturedFacesNormals frame vertexData remainingPendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
@@ -814,26 +821,21 @@ buildTexturedFaceVertices frame vertexData pendingFaces weightedNormals bitflags
 -}
 flatTexturedFacesNormals :
     List Vertex
-    -> List PendingFace
     -> Frame3d Meters coordinates { defines : ObjCoordinates }
     -> VertexData
     -> Point3d Meters coordinates
     -> Point3d Meters coordinates
     -> ( Float, Float )
     -> ( Float, Float )
-    -> Bool
     -> Vector3d Unitless coordinates
-    -> Dict Int (List Int)
     -> List (TexturedFace coordinates)
     -> Int
     -> List ( Int, Int, Int )
-    -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-    -> Bool
-    -> ( List (TexturedFace coordinates), List ( Int, Int, Int ) )
-flatTexturedFacesNormals elementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags =
+    -> ( List (TexturedFace coordinates), Int, List ( Int, Int, Int ) )
+flatTexturedFacesNormals elementVertices frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normal outFaceVertices outIdx outFaceIndices =
     case elementVertices of
         [] ->
-            generateTexturedFacesNormals frame vertexData pendingFaces vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+            ( outFaceVertices, outIdx, outFaceIndices )
 
         vN :: remainingElementVertices ->
             case Array.get vN.p vertexData.positions of
@@ -843,29 +845,15 @@ flatTexturedFacesNormals elementVertices pendingFaces frame vertexData pos0InFra
                             let
                                 posNInFrame =
                                     Point3d.placeIn frame posN
-
-                                normal =
-                                    if normalFound then
-                                        normalInFrame
-
-                                    else
-                                        Vector3d.normalize
-                                            (Vector3d.cross
-                                                (Vector3d.from pos0InFrame prevPosInFrame)
-                                                (Vector3d.from pos0InFrame posNInFrame)
-                                            )
                             in
                             flatTexturedFacesNormals remainingElementVertices
-                                pendingFaces
                                 frame
                                 vertexData
                                 pos0InFrame
                                 posNInFrame
                                 uv0
                                 uvN
-                                True
                                 normal
-                                vMap
                                 ({ position = pos0InFrame, normal = normal, uv = uv0 }
                                     :: { position = prevPosInFrame, normal = normal, uv = prevUV }
                                     :: { position = posNInFrame, normal = normal, uv = uvN }
@@ -873,14 +861,12 @@ flatTexturedFacesNormals elementVertices pendingFaces frame vertexData pos0InFra
                                 )
                                 (outIdx + 3)
                                 (( outIdx, outIdx + 1, outIdx + 2 ) :: outFaceIndices)
-                                weightedNormals
-                                bitflags
 
                         Nothing ->
-                            flatTexturedFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+                            flatTexturedFacesNormals remainingElementVertices frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normal outFaceVertices outIdx outFaceIndices
 
                 Nothing ->
-                    flatTexturedFacesNormals remainingElementVertices pendingFaces frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normalFound normalInFrame vMap outFaceVertices outIdx outFaceIndices weightedNormals bitflags
+                    flatTexturedFacesNormals remainingElementVertices frame vertexData pos0InFrame prevPosInFrame uv0 prevUV normal outFaceVertices outIdx outFaceIndices
 
 
 smoothingGroupsSet : List Group -> Set Int
@@ -962,57 +948,51 @@ triangles still contribute their area.
 polygonFanNormal :
     VertexData
     -> { x : Float, y : Float, z : Float }
+    -> { x : Float, y : Float, z : Float }
     -> List Vertex
     -> Vector3d Unitless ObjCoordinates
     -> Vector3d Unitless ObjCoordinates
-polygonFanNormal vertexData p0 elementVertices normal =
+polygonFanNormal vertexData p0 prevPos elementVertices normal =
     case elementVertices of
-        vA :: ((vB :: _) as remainingElementVertices) ->
-            case Array.get vA.p vertexData.positions of
-                Just posA ->
-                    case Array.get vB.p vertexData.positions of
-                        Just posB ->
-                            let
-                                pA =
-                                    Point3d.toMeters posA
+        vB :: remainingElementVertices ->
+            case Array.get vB.p vertexData.positions of
+                Just posB ->
+                    let
+                        pB =
+                            Point3d.toMeters posB
 
-                                pB =
-                                    Point3d.toMeters posB
+                        ax =
+                            prevPos.x - p0.x
 
-                                ax =
-                                    pA.x - p0.x
+                        ay =
+                            prevPos.y - p0.y
 
-                                ay =
-                                    pA.y - p0.y
+                        az =
+                            prevPos.z - p0.z
 
-                                az =
-                                    pA.z - p0.z
+                        bx =
+                            pB.x - p0.x
 
-                                bx =
-                                    pB.x - p0.x
+                        by =
+                            pB.y - p0.y
 
-                                by =
-                                    pB.y - p0.y
-
-                                bz =
-                                    pB.z - p0.z
-                            in
-                            polygonFanNormal vertexData
-                                p0
-                                remainingElementVertices
-                                (Vector3d.plus normal
-                                    (Vector3d.unitless
-                                        (by * az - bz * ay)
-                                        (bz * ax - bx * az)
-                                        (bx * ay - by * ax)
-                                    )
-                                )
-
-                        Nothing ->
-                            polygonFanNormal vertexData p0 remainingElementVertices normal
+                        bz =
+                            pB.z - p0.z
+                    in
+                    polygonFanNormal vertexData
+                        p0
+                        pB
+                        remainingElementVertices
+                        (Vector3d.plus normal
+                            (Vector3d.unitless
+                                (by * az - bz * ay)
+                                (bz * ax - bx * az)
+                                (bx * ay - by * ax)
+                            )
+                        )
 
                 Nothing ->
-                    polygonFanNormal vertexData p0 remainingElementVertices normal
+                    polygonFanNormal vertexData p0 prevPos remainingElementVertices normal
 
         _ ->
             normal
@@ -1024,17 +1004,22 @@ collectWeightedNormalsFaces vertexData smoothingGroup faceElements outWeightedNo
         [] ->
             outWeightedNormals
 
-        (FaceElement _ _ ((v0 :: ((_ :: _ :: _) as remainingElementVertices)) as elementVertices)) :: remainingFaceElements ->
+        (FaceElement _ _ ((v0 :: v1 :: ((_ :: _) as remainingElementVertices)) as elementVertices)) :: remainingFaceElements ->
             case Array.get v0.p vertexData.positions of
                 Just pos0 ->
-                    let
-                        normal =
-                            polygonFanNormal vertexData (Point3d.toMeters pos0) remainingElementVertices Vector3d.zero
-                    in
-                    collectWeightedNormalsFaces vertexData
-                        smoothingGroup
-                        remainingFaceElements
-                        (collectWeightedNormalsVertices smoothingGroup normal elementVertices outWeightedNormals)
+                    case Array.get v1.p vertexData.positions of
+                        Just pos1 ->
+                            let
+                                normal =
+                                    polygonFanNormal vertexData (Point3d.toMeters pos0) (Point3d.toMeters pos1) remainingElementVertices Vector3d.zero
+                            in
+                            collectWeightedNormalsFaces vertexData
+                                smoothingGroup
+                                remainingFaceElements
+                                (collectWeightedNormalsVertices smoothingGroup normal elementVertices outWeightedNormals)
+
+                        Nothing ->
+                            collectWeightedNormalsFaces vertexData smoothingGroup remainingFaceElements outWeightedNormals
 
                 Nothing ->
                     collectWeightedNormalsFaces vertexData smoothingGroup remainingFaceElements outWeightedNormals
