@@ -83,10 +83,10 @@ faces frame bitflags vertexData filters filteredGroups =
                                     let
                                         smoothNormals =
                                             if bitflags then
-                                                SmoothNormals.bitflag vertexData filteredGroups
+                                                SmoothNormals.bitflag vertexData.positions filteredGroups
 
                                             else
-                                                SmoothNormals.exact vertexData filteredGroups
+                                                SmoothNormals.exact vertexData.positions filteredGroups
                                     in
                                     addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices remainingSmoothPendingFaces (IndexMap.init2 vertexData.emptyIndexMap) faceVertices (maxIndex + 1) [] faceIndices
 
@@ -124,10 +124,10 @@ texturedFaces frame bitflags vertexData filters filteredGroups =
                                     let
                                         smoothNormals =
                                             if bitflags then
-                                                SmoothNormals.bitflag vertexData filteredGroups
+                                                SmoothNormals.bitflag vertexData.positions filteredGroups
 
                                             else
-                                                SmoothNormals.exact vertexData filteredGroups
+                                                SmoothNormals.exact vertexData.positions filteredGroups
                                     in
                                     addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVertices remainingSmoothPendingFaces (IndexMap.init3 vertexData.emptyIndexMap) faceVertices (maxIndex + 1) [] faceIndices
 
@@ -194,10 +194,10 @@ bumpyFaces frame bitflags vertexData filters filteredGroups =
                                     let
                                         smoothNormals =
                                             if bitflags then
-                                                SmoothNormals.bitflag vertexData filteredGroups
+                                                SmoothNormals.bitflag vertexData.positions filteredGroups
 
                                             else
-                                                SmoothNormals.exact vertexData filteredGroups
+                                                SmoothNormals.exact vertexData.positions filteredGroups
                                     in
                                     addSmoothTexturedFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingSmoothPendingFaces (IndexMap.init3 vertexData.emptyIndexMap) faceVertices (maxIndex + 1) [] faceIndices
 

@@ -5,43 +5,42 @@ module Obj.Internal.SmoothNormals exposing
     , get
     )
 
-import Array
+import Array exposing (Array)
 import Bitwise
-import Dict exposing (Dict)
+import Length exposing (Meters)
 import Obj.Internal.Parse
     exposing
         ( FaceElement(..)
         , Group(..)
         , ObjCoordinates
         , Vertex
-        , VertexData
         )
-import Point3d
+import Point3d exposing (Point3d)
 import Quantity exposing (Unitless)
 import Set
 import Vector3d exposing (Vector3d)
 
 
 type SmoothNormals
-    = SmoothNormals (Int -> List ( Int, Vector3d Unitless ObjCoordinates ) -> Maybe (Vector3d Unitless ObjCoordinates) -> Maybe (Vector3d Unitless ObjCoordinates)) (Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )))
+    = SmoothNormals (Int -> List ( Int, Vector3d Unitless ObjCoordinates ) -> Maybe (Vector3d Unitless ObjCoordinates) -> Maybe (Vector3d Unitless ObjCoordinates)) (Array (List ( Int, Vector3d Unitless ObjCoordinates )))
 
 
-exact : VertexData -> List Group -> SmoothNormals
-exact vertexData groups =
+exact : Array (Point3d Meters ObjCoordinates) -> List Group -> SmoothNormals
+exact positions groups =
     let
         smoothingGroupsSet =
             Set.fromList (smoothingGroupsHelp groups [])
     in
-    SmoothNormals getExact (collectSmoothNormalsHelp (\smoothingGroup -> Set.member smoothingGroup smoothingGroupsSet) vertexData groups Dict.empty)
+    SmoothNormals getExact (collectSmoothNormalsHelp (\smoothingGroup -> Set.member smoothingGroup smoothingGroupsSet) positions groups (Array.repeat (Array.length positions) []))
 
 
-bitflag : VertexData -> List Group -> SmoothNormals
-bitflag vertexData groups =
+bitflag : Array (Point3d Meters ObjCoordinates) -> List Group -> SmoothNormals
+bitflag positions groups =
     let
         allBits =
             List.foldl Bitwise.or 0 (smoothingGroupsHelp groups [])
     in
-    SmoothNormals getBitflag (collectSmoothNormalsHelp (\smoothingGroup -> Bitwise.and smoothingGroup allBits /= 0) vertexData groups Dict.empty)
+    SmoothNormals getBitflag (collectSmoothNormalsHelp (\smoothingGroup -> Bitwise.and smoothingGroup allBits /= 0) positions groups (Array.repeat (Array.length positions) []))
 
 
 smoothingGroupsHelp : List Group -> List Int -> List Int
@@ -58,8 +57,8 @@ smoothingGroupsHelp groups outSmoothingGroups =
                 smoothingGroupsHelp remainingGroups (record.smoothingGroup :: outSmoothingGroups)
 
 
-collectSmoothNormalsHelp : (Int -> Bool) -> VertexData -> List Group -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-collectSmoothNormalsHelp matches vertexData groups outSmoothNormals =
+collectSmoothNormalsHelp : (Int -> Bool) -> Array (Point3d Meters ObjCoordinates) -> List Group -> Array (List ( Int, Vector3d Unitless ObjCoordinates )) -> Array (List ( Int, Vector3d Unitless ObjCoordinates ))
+collectSmoothNormalsHelp matches positions groups outSmoothNormals =
     case groups of
         [] ->
             outSmoothNormals
@@ -67,12 +66,12 @@ collectSmoothNormalsHelp matches vertexData groups outSmoothNormals =
         (Group { smoothingGroup } faceElements _ _) :: remainingGroups ->
             if matches smoothingGroup then
                 collectSmoothNormalsHelp matches
-                    vertexData
+                    positions
                     remainingGroups
-                    (collectSmoothNormalsFaces vertexData smoothingGroup faceElements outSmoothNormals)
+                    (collectSmoothNormalsFaces positions smoothingGroup faceElements outSmoothNormals)
 
             else
-                collectSmoothNormalsHelp matches vertexData remainingGroups outSmoothNormals
+                collectSmoothNormalsHelp matches positions remainingGroups outSmoothNormals
 
 
 {-| Sum the area-weighted cross products of all fan triangles for a polygon.
@@ -88,16 +87,16 @@ triangles still contribute their area.
 
 -}
 polygonFanNormal :
-    VertexData
+    Array (Point3d Meters ObjCoordinates)
     -> { x : Float, y : Float, z : Float }
     -> { x : Float, y : Float, z : Float }
     -> List Vertex
     -> Vector3d Unitless ObjCoordinates
     -> Vector3d Unitless ObjCoordinates
-polygonFanNormal vertexData p0 prevPos elementVertices normal =
+polygonFanNormal positions p0 prevPos elementVertices normal =
     case elementVertices of
         vB :: remainingElementVertices ->
-            case Array.get vB.p vertexData.positions of
+            case Array.get vB.p positions of
                 Just posB ->
                     let
                         pB =
@@ -121,7 +120,7 @@ polygonFanNormal vertexData p0 prevPos elementVertices normal =
                         bz =
                             pB.z - p0.z
                     in
-                    polygonFanNormal vertexData
+                    polygonFanNormal positions
                         p0
                         pB
                         remainingElementVertices
@@ -134,45 +133,45 @@ polygonFanNormal vertexData p0 prevPos elementVertices normal =
                         )
 
                 Nothing ->
-                    polygonFanNormal vertexData p0 prevPos remainingElementVertices normal
+                    polygonFanNormal positions p0 prevPos remainingElementVertices normal
 
         _ ->
             normal
 
 
-collectSmoothNormalsFaces : VertexData -> Int -> List FaceElement -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
-collectSmoothNormalsFaces vertexData smoothingGroup faceElements outSmoothNormals =
+collectSmoothNormalsFaces : Array (Point3d Meters ObjCoordinates) -> Int -> List FaceElement -> Array (List ( Int, Vector3d Unitless ObjCoordinates )) -> Array (List ( Int, Vector3d Unitless ObjCoordinates ))
+collectSmoothNormalsFaces positions smoothingGroup faceElements outSmoothNormals =
     case faceElements of
         [] ->
             outSmoothNormals
 
         (FaceElement _ _ ((v0 :: v1 :: ((_ :: _) as remainingElementVertices)) as elementVertices)) :: remainingFaceElements ->
-            case Array.get v0.p vertexData.positions of
+            case Array.get v0.p positions of
                 Just pos0 ->
-                    case Array.get v1.p vertexData.positions of
+                    case Array.get v1.p positions of
                         Just pos1 ->
                             let
                                 normal =
-                                    polygonFanNormal vertexData (Point3d.toMeters pos0) (Point3d.toMeters pos1) remainingElementVertices Vector3d.zero
+                                    polygonFanNormal positions (Point3d.toMeters pos0) (Point3d.toMeters pos1) remainingElementVertices Vector3d.zero
                             in
-                            collectSmoothNormalsFaces vertexData
+                            collectSmoothNormalsFaces positions
                                 smoothingGroup
                                 remainingFaceElements
                                 (collectSmoothNormalsVertices smoothingGroup normal elementVertices outSmoothNormals)
 
                         Nothing ->
-                            collectSmoothNormalsFaces vertexData smoothingGroup remainingFaceElements outSmoothNormals
+                            collectSmoothNormalsFaces positions smoothingGroup remainingFaceElements outSmoothNormals
 
                 Nothing ->
-                    collectSmoothNormalsFaces vertexData smoothingGroup remainingFaceElements outSmoothNormals
+                    collectSmoothNormalsFaces positions smoothingGroup remainingFaceElements outSmoothNormals
 
         (FaceElement _ _ _) :: remainingFaceElements ->
-            collectSmoothNormalsFaces vertexData smoothingGroup remainingFaceElements outSmoothNormals
+            collectSmoothNormalsFaces positions smoothingGroup remainingFaceElements outSmoothNormals
 
 
 get : Int -> Int -> SmoothNormals -> Maybe (Vector3d Unitless ObjCoordinates)
-get p smoothingGroup (SmoothNormals lookup dict) =
-    case Dict.get p dict of
+get p smoothingGroup (SmoothNormals lookup arr) =
+    case Array.get p arr of
         Nothing ->
             Nothing
 
@@ -249,7 +248,7 @@ addNormal smoothingGroup normal entries outEntries =
                 addNormal smoothingGroup normal remainingEntries (currentEntry :: outEntries)
 
 
-collectSmoothNormalsVertices : Int -> Vector3d Unitless ObjCoordinates -> List Vertex -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates )) -> Dict Int (List ( Int, Vector3d Unitless ObjCoordinates ))
+collectSmoothNormalsVertices : Int -> Vector3d Unitless ObjCoordinates -> List Vertex -> Array (List ( Int, Vector3d Unitless ObjCoordinates )) -> Array (List ( Int, Vector3d Unitless ObjCoordinates ))
 collectSmoothNormalsVertices smoothingGroup normal elementVertices outSmoothNormals =
     case elementVertices of
         [] ->
@@ -262,8 +261,8 @@ collectSmoothNormalsVertices smoothingGroup normal elementVertices outSmoothNorm
             collectSmoothNormalsVertices smoothingGroup
                 normal
                 remainingElementVertices
-                (Dict.insert p
-                    (case Dict.get p outSmoothNormals of
+                (Array.set p
+                    (case Array.get p outSmoothNormals of
                         Just entries ->
                             addNormal smoothingGroup normal entries []
 
