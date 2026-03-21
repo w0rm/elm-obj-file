@@ -13,6 +13,7 @@ module Obj.Internal.Parse exposing
 import Array exposing (Array)
 import Direction3d exposing (Direction3d)
 import Length exposing (Meters)
+import Obj.Internal.IndexMap as IndexMap exposing (Empty, IndexMap)
 import Point3d exposing (Point3d)
 
 
@@ -24,7 +25,7 @@ type alias VertexData =
     { positions : Array (Point3d Meters ObjCoordinates)
     , normals : Array (Direction3d ObjCoordinates)
     , uvs : Array ( Float, Float )
-    , indexMap : Array (List Int)
+    , emptyIndexMap : IndexMap Empty
     , fullGroups : List Group
     }
 
@@ -208,18 +209,19 @@ parseHelp units lines lineno positions normals uvs groups object_ material_ grou
 
         [] ->
             let
-                positions_ =
+                positionsArray =
                     Array.fromList (List.reverse positions)
 
                 fullGroups =
                     -- flush the last group
                     addNonEmptyGroup object_ material_ groups_ currentSmoothingGroup faceElements lineElements pointsElements groups
+
             in
             Ok
-                ( { positions = positions_
+                ( { positions = positionsArray
                   , normals = Array.fromList (List.reverse normals)
                   , uvs = Array.fromList (List.reverse uvs)
-                  , indexMap = Array.repeat (Array.length positions_) []
+                  , emptyIndexMap = IndexMap.empty (Array.length positionsArray)
                   , fullGroups = fullGroups
                   }
                 , fullGroups

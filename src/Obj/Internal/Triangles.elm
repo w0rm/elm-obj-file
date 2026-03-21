@@ -6,7 +6,8 @@ module Obj.Internal.Triangles exposing
 import Array exposing (Array)
 import Frame3d exposing (Frame3d)
 import Length exposing (Meters)
-import Obj.Internal.MeshHelpers exposing (buildMeshResult, groupIndices, lookup1)
+import Obj.Internal.IndexMap as IndexMap exposing (IndexMap, Key1, Key2)
+import Obj.Internal.MeshHelpers exposing (buildMeshResult, groupIndices)
 import Obj.Internal.Parse
     exposing
         ( FaceElement(..)
@@ -31,7 +32,7 @@ triangles frame vertexData filters groups =
         filters
         groups
         -1
-        vertexData.indexMap
+        (IndexMap.init vertexData.emptyIndexMap)
         []
         []
 
@@ -47,32 +48,32 @@ texturedTriangles frame vertexData filters groups =
         filters
         groups
         -1
-        vertexData.indexMap
+        (IndexMap.init2 vertexData.emptyIndexMap)
         []
         []
 
 
-type alias IndexedTriangles a =
+type alias IndexedTriangles a k =
     { maxIndex : Int
-    , indexMap : Array (List Int)
+    , indexMap : IndexMap k
     , faceVertices : List a
     , faceIndices : List ( Int, Int, Int )
     }
 
 
-type alias AddIndexedTriangles a =
+type alias AddIndexedTriangles a k =
     Int
     -> List Vertex
     -> List FaceElement
     -> Int
-    -> Array (List Int)
+    -> IndexMap k
     -> List a
     -> List Int
     -> List ( Int, Int, Int )
-    -> Result String (IndexedTriangles a)
+    -> Result String (IndexedTriangles a k)
 
 
-triangularMesh : AddIndexedTriangles a -> List String -> List Group -> Int -> Array (List Int) -> List a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
+triangularMesh : AddIndexedTriangles a k -> List String -> List Group -> Int -> IndexMap k -> List a -> List ( Int, Int, Int ) -> Result String (TriangularMesh a)
 triangularMesh add filters groups maxIndex indexMap outVertices outFaceIndices =
     case groups of
         (Group _ ((FaceElement lineno _ elementVertices) :: remainingFaceElements) _ _) :: remainingElementGroups ->
@@ -91,39 +92,42 @@ triangularMesh add filters groups maxIndex indexMap outVertices outFaceIndices =
             buildMeshResult filters (Array.fromList (List.reverse outVertices)) outFaceIndices
 
 
-addTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles (Point3d Meters coordinates)
+addTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles (Point3d Meters coordinates) Key1
 addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices =
     case elementVertices of
         { p } :: remainingVertices ->
-            case Array.get p indexMap of
-                Just [ idx ] ->
-                    addTriangles frame
-                        vertexData
-                        lineno
-                        remainingVertices
-                        elements
-                        maxIndex
-                        indexMap
-                        outVertices
-                        (idx :: outIndices)
-                        outFaceIndices
+            let
+                idx =
+                    IndexMap.get p indexMap
+            in
+            if idx > -1 then
+                addTriangles frame
+                    vertexData
+                    lineno
+                    remainingVertices
+                    elements
+                    maxIndex
+                    indexMap
+                    outVertices
+                    (idx :: outIndices)
+                    outFaceIndices
 
-                _ ->
-                    case Array.get p vertexData.positions of
-                        Just vertex ->
-                            addTriangles frame
-                                vertexData
-                                lineno
-                                remainingVertices
-                                elements
-                                (maxIndex + 1)
-                                (Array.set p [ maxIndex + 1 ] indexMap)
-                                (Point3d.placeIn frame vertex :: outVertices)
-                                (maxIndex + 1 :: outIndices)
-                                outFaceIndices
+            else
+                case Array.get p vertexData.positions of
+                    Just vertex ->
+                        addTriangles frame
+                            vertexData
+                            lineno
+                            remainingVertices
+                            elements
+                            (maxIndex + 1)
+                            (IndexMap.insert p (maxIndex + 1) indexMap)
+                            (Point3d.placeIn frame vertex :: outVertices)
+                            (maxIndex + 1 :: outIndices)
+                            outFaceIndices
 
-                        Nothing ->
-                            formatError lineno "Index out of range"
+                    Nothing ->
+                        formatError lineno "Index out of range"
 
         [] ->
             let
@@ -158,22 +162,14 @@ addTriangles frame vertexData lineno elementVertices elements maxIndex indexMap 
                         }
 
 
-addTexturedTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles { position : Point3d Meters coordinates, uv : ( Float, Float ) }
+addTexturedTriangles : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedTriangles { position : Point3d Meters coordinates, uv : ( Float, Float ) } Key2
 addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices =
     case elementVertices of
         { p, uv } :: remainingVertices ->
             if uv > -1 then
                 let
-                    lookupArray =
-                        case Array.get p indexMap of
-                            Just arr ->
-                                arr
-
-                            Nothing ->
-                                []
-
                     idx =
-                        lookup1 uv lookupArray
+                        IndexMap.get2 p uv indexMap
                 in
                 if idx > -1 then
                     addTexturedTriangles frame
@@ -198,7 +194,7 @@ addTexturedTriangles frame vertexData lineno elementVertices elements maxIndex i
                                         remainingVertices
                                         elements
                                         (maxIndex + 1)
-                                        (Array.set p (uv :: maxIndex + 1 :: lookupArray) indexMap)
+                                        (IndexMap.insert2 p uv (maxIndex + 1) indexMap)
                                         ({ position = Point3d.placeIn frame position
                                          , uv = uvCoord
                                          }

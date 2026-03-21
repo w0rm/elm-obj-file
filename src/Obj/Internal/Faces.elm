@@ -4,12 +4,12 @@ module Obj.Internal.Faces exposing
     , texturedFaces
     )
 
-import Array exposing (Array)
-import Dict exposing (Dict)
+import Array
 import Direction3d
 import Frame3d exposing (Frame3d)
 import Length exposing (Meters)
-import Obj.Internal.MeshHelpers exposing (buildMeshResult, groupIndices, lookup1, lookup2)
+import Obj.Internal.IndexMap as IndexMap exposing (IndexMap, Key2, Key3)
+import Obj.Internal.MeshHelpers exposing (buildMeshResult, groupIndices)
 import Obj.Internal.Parse
     exposing
         ( FaceElement(..)
@@ -63,7 +63,7 @@ faces :
     -> List Group
     -> Result String (TriangularMesh (Face coordinates))
 faces frame bitflags vertexData filters filteredGroups =
-    case triangularMesh (addFaces frame vertexData) filteredGroups -1 vertexData.indexMap [] [] [] [] of
+    case triangularMesh (addFaces frame vertexData) filteredGroups -1 (IndexMap.init2 vertexData.emptyIndexMap) [] [] [] [] of
         Err error ->
             Err error
 
@@ -88,7 +88,7 @@ faces frame bitflags vertexData filters filteredGroups =
                                             else
                                                 SmoothNormals.exact vertexData filteredGroups
                                     in
-                                    addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices remainingSmoothPendingFaces Dict.empty faceVertices (maxIndex + 1) [] faceIndices
+                                    addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices remainingSmoothPendingFaces (IndexMap.init2 vertexData.emptyIndexMap) faceVertices (maxIndex + 1) [] faceIndices
 
                         ( finalVertices, finalIndices ) =
                             addFlatFaces frame vertexData [] flatPendingFaces Point3d.origin Point3d.origin verticesAfterSmooth idxAfterSmooth indicesAfterSmooth
@@ -104,7 +104,7 @@ texturedFaces :
     -> List Group
     -> Result String (TriangularMesh (TexturedFace coordinates))
 texturedFaces frame bitflags vertexData filters filteredGroups =
-    case triangularMesh (addTexturedFaces frame vertexData) filteredGroups -1 vertexData.indexMap [] [] [] [] of
+    case triangularMesh (addTexturedFaces frame vertexData) filteredGroups -1 (IndexMap.init3 vertexData.emptyIndexMap) [] [] [] [] of
         Err error ->
             Err error
 
@@ -129,7 +129,7 @@ texturedFaces frame bitflags vertexData filters filteredGroups =
                                             else
                                                 SmoothNormals.exact vertexData filteredGroups
                                     in
-                                    addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVertices remainingSmoothPendingFaces Dict.empty faceVertices (maxIndex + 1) [] faceIndices
+                                    addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVertices remainingSmoothPendingFaces (IndexMap.init3 vertexData.emptyIndexMap) faceVertices (maxIndex + 1) [] faceIndices
 
                         ( finalVertices, finalIndices ) =
                             addFlatTexturedFaces frame vertexData [] flatPendingFaces Point3d.origin Point3d.origin ( 0, 0 ) ( 0, 0 ) verticesAfterSmooth idxAfterSmooth indicesAfterSmooth
@@ -174,7 +174,7 @@ bumpyFaces :
     -> List Group
     -> Result String (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ), tangent : Vector3d Unitless coordinates, tangentBasisIsRightHanded : Bool })
 bumpyFaces frame bitflags vertexData filters filteredGroups =
-    case triangularMesh (addTexturedFaces frame vertexData) filteredGroups -1 vertexData.indexMap [] [] [] [] of
+    case triangularMesh (addTexturedFaces frame vertexData) filteredGroups -1 (IndexMap.init3 vertexData.emptyIndexMap) [] [] [] [] of
         Err error ->
             Err error
 
@@ -199,7 +199,7 @@ bumpyFaces frame bitflags vertexData filters filteredGroups =
                                             else
                                                 SmoothNormals.exact vertexData filteredGroups
                                     in
-                                    addSmoothTexturedFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingSmoothPendingFaces Dict.empty faceVertices (maxIndex + 1) [] faceIndices
+                                    addSmoothTexturedFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingSmoothPendingFaces (IndexMap.init3 vertexData.emptyIndexMap) faceVertices (maxIndex + 1) [] faceIndices
 
                         ( finalVertices, finalIndices ) =
                             addFlatTexturedFaces frame vertexData [] flatPendingFaces Point3d.origin Point3d.origin ( 0, 0 ) ( 0, 0 ) verticesAfterSmooth idxAfterSmooth indicesAfterSmooth
@@ -223,9 +223,9 @@ type alias TexturedFace coordinates =
     }
 
 
-type alias IndexedFaces a =
+type alias IndexedFaces a k =
     { maxIndex : Int
-    , indexMap : Array (List Int)
+    , indexMap : IndexMap k
     , faceVertices : List a
     , faceIndices : List ( Int, Int, Int )
     , flatPendingFaces : List FaceElement
@@ -236,19 +236,19 @@ type alias IndexedFaces a =
 {-| Like AddIndexedTriangles, but also carries a smoothing group and collects
 faces that lack normals into flat/smooth pending lists rather than failing.
 -}
-type alias AddIndexedFaces a =
+type alias AddIndexedFaces a k =
     Int
     -> Int
     -> List Vertex
     -> List FaceElement
     -> Int
-    -> Array (List Int)
+    -> IndexMap k
     -> List a
     -> List Int
     -> List ( Int, Int, Int )
     -> List FaceElement
     -> List ( Int, FaceElement )
-    -> Result String (IndexedFaces a)
+    -> Result String (IndexedFaces a k)
 
 
 {-| Shared group-level driver for `faces`, `texturedFaces`, and `bumpyFaces`
@@ -266,15 +266,15 @@ work.
 
 -}
 triangularMesh :
-    AddIndexedFaces a
+    AddIndexedFaces a k
     -> List Group
     -> Int
-    -> Array (List Int)
+    -> IndexMap k
     -> List a
     -> List ( Int, Int, Int )
     -> List FaceElement
     -> List ( Int, FaceElement )
-    -> Result String (IndexedFaces a)
+    -> Result String (IndexedFaces a k)
 triangularMesh add groups maxIndex indexMap outVertices outFaceIndices outFlatPendingFaces outSmoothPendingFaces =
     case groups of
         (Group record (((FaceElement lineno hasNormals elementVertices) as faceElement) :: faceElements) _ _) :: remainingGroups ->
@@ -310,21 +310,13 @@ Note: the dedup key is `(n)` alone via `lookup1` (no UV component), and the
 indexMap stores `(n, vertexIdx)` pairs rather than triples.
 
 -}
-addFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (Face coordinates)
+addFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (Face coordinates) Key2
 addFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices outFlatPendingFaces outSmoothPendingFaces =
     case elementVertices of
         { p, n } :: remainingVertices ->
             let
-                lookupArray =
-                    case Array.get p indexMap of
-                        Just arr ->
-                            arr
-
-                        Nothing ->
-                            []
-
                 idx =
-                    lookup1 n lookupArray
+                    IndexMap.get2 p n indexMap
             in
             if idx > -1 then
                 addFaces frame
@@ -353,7 +345,7 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
                                     remainingVertices
                                     elements
                                     (maxIndex + 1)
-                                    (Array.set p (n :: maxIndex + 1 :: lookupArray) indexMap)
+                                    (IndexMap.insert2 p n (maxIndex + 1) indexMap)
                                     ({ position = Point3d.placeIn frame position
                                      , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
                                      }
@@ -419,21 +411,13 @@ addFaces frame vertexData smoothingGroup lineno elementVertices elements maxInde
                     Ok { maxIndex = maxIndex, indexMap = indexMap, faceVertices = outVertices, faceIndices = newFaceIndices, flatPendingFaces = outFlatPendingFaces, smoothPendingFaces = outSmoothPendingFaces }
 
 
-addTexturedFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (TexturedFace coordinates)
+addTexturedFaces : Frame3d Meters coordinates { defines : ObjCoordinates } -> VertexData -> AddIndexedFaces (TexturedFace coordinates) Key3
 addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements maxIndex indexMap outVertices outIndices outFaceIndices outFlatPendingFaces outSmoothPendingFaces =
     case elementVertices of
         { p, uv, n } :: remainingVertices ->
             let
-                lookupArray =
-                    case Array.get p indexMap of
-                        Just arr ->
-                            arr
-
-                        Nothing ->
-                            []
-
                 idx =
-                    lookup2 uv n lookupArray
+                    IndexMap.get3 p uv n indexMap
             in
             if idx > -1 then
                 addTexturedFaces frame
@@ -464,7 +448,7 @@ addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements
                                             remainingVertices
                                             elements
                                             (maxIndex + 1)
-                                            (Array.set p (uv :: n :: maxIndex + 1 :: lookupArray) indexMap)
+                                            (IndexMap.insert3 p uv n (maxIndex + 1) indexMap)
                                             ({ position = Point3d.placeIn frame position
                                              , normal = Direction3d.toVector (Direction3d.placeIn frame normal)
                                              , uv = uvCoord
@@ -538,7 +522,7 @@ addTexturedFaces frame vertexData smoothingGroup lineno elementVertices elements
 
 Analogous to `addFaces` but for the second pass: processes smooth pending faces
 vertex by vertex, looking up area-weighted normals from `smoothNormals`.
-Deduplicates via `vMap` (keyed by position index, storing smoothingGroup/vertexIdx pairs)
+Deduplicates via `smoothIndexMap` (keyed by position index, storing smoothingGroup/vertexIdx pairs)
 so vertices shared across smooth faces within the same smoothing group are emitted once.
 
 When `elementVertices` is exhausted the next pending face is started inline.
@@ -551,13 +535,13 @@ addSmoothFaces :
     -> Int
     -> List Vertex
     -> List ( Int, FaceElement )
-    -> Dict Int (List Int)
+    -> IndexMap Key2
     -> List (Face coordinates)
     -> Int
     -> List Int
     -> List ( Int, Int, Int )
     -> ( List (Face coordinates), Int, List ( Int, Int, Int ) )
-addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices =
+addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices =
     case elementVertices of
         [] ->
             let
@@ -571,7 +555,7 @@ addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices pen
             in
             case pendingFaces of
                 ( newSmoothingGroup, FaceElement _ _ newElementVertices ) :: remainingPendingFaces ->
-                    addSmoothFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingPendingFaces vMap outVertices outIdx [] newFaceIndices
+                    addSmoothFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingPendingFaces smoothIndexMap outVertices outIdx [] newFaceIndices
 
                 [] ->
                     ( outVertices, outIdx, newFaceIndices )
@@ -579,15 +563,10 @@ addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices pen
         { p } :: remainingElementVertices ->
             let
                 existingIdx =
-                    case Dict.get p vMap of
-                        Just entries ->
-                            lookup1 smoothingGroup entries
-
-                        Nothing ->
-                            -1
+                    IndexMap.get2 p smoothingGroup smoothIndexMap
             in
             if existingIdx > -1 then
-                addSmoothFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx (existingIdx :: outIndices) outFaceIndices
+                addSmoothFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx (existingIdx :: outIndices) outFaceIndices
 
             else
                 case SmoothNormals.get p smoothingGroup smoothNormals of
@@ -600,18 +579,9 @@ addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices pen
                                     smoothingGroup
                                     remainingElementVertices
                                     pendingFaces
-                                    (Dict.insert p
-                                        -- (p, smoothingGroup) is guaranteed unique here (lookup1 returned -1 above),
-                                        -- so we always prepend a fresh pair; never overwrite an existing entry.
-                                        (case Dict.get p vMap of
-                                            Just outEntries ->
-                                                smoothingGroup :: outIdx :: outEntries
-
-                                            Nothing ->
-                                                [ smoothingGroup, outIdx ]
-                                        )
-                                        vMap
-                                    )
+                                    -- (p, smoothingGroup) is guaranteed unique here (get1 returned -1 above),
+                                    -- so we always prepend a fresh pair; never overwrite an existing entry.
+                                    (IndexMap.insert2 p smoothingGroup outIdx smoothIndexMap)
                                     ({ position = Point3d.placeIn frame position
                                      , normal = Vector3d.placeIn frame normal
                                      }
@@ -622,16 +592,16 @@ addSmoothFaces frame vertexData smoothNormals smoothingGroup elementVertices pen
                                     outFaceIndices
 
                             Nothing ->
-                                addSmoothFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices
+                                addSmoothFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices
 
                     Nothing ->
-                        addSmoothFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices
+                        addSmoothFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices
 
 
 {-| Smooth normal generation: combined vertex- and face-level loop for textured faces.
 
 Analogous to `addFacesWithNormals` but for `TexturedFace`. Deduplicates on
-`(smoothingGroup, uv)` via `lookup2` / triples in `vMap`.
+`(smoothingGroup, uv)` via `lookup2` / triples in `smoothIndexMap`.
 
 -}
 addSmoothTexturedFaces :
@@ -641,13 +611,13 @@ addSmoothTexturedFaces :
     -> Int
     -> List Vertex
     -> List ( Int, FaceElement )
-    -> Dict Int (List Int)
+    -> IndexMap Key3
     -> List (TexturedFace coordinates)
     -> Int
     -> List Int
     -> List ( Int, Int, Int )
     -> ( List (TexturedFace coordinates), Int, List ( Int, Int, Int ) )
-addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices =
+addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices =
     case elementVertices of
         [] ->
             let
@@ -661,7 +631,7 @@ addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVert
             in
             case pendingFaces of
                 ( newSmoothingGroup, FaceElement _ _ newElementVertices ) :: remainingPendingFaces ->
-                    addSmoothTexturedFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingPendingFaces vMap outVertices outIdx [] newFaceIndices
+                    addSmoothTexturedFaces frame vertexData smoothNormals newSmoothingGroup newElementVertices remainingPendingFaces smoothIndexMap outVertices outIdx [] newFaceIndices
 
                 [] ->
                     ( outVertices, outIdx, newFaceIndices )
@@ -669,15 +639,10 @@ addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVert
         { p, uv } :: remainingElementVertices ->
             let
                 existingIdx =
-                    case Dict.get p vMap of
-                        Just entries ->
-                            lookup2 smoothingGroup uv entries
-
-                        Nothing ->
-                            -1
+                    IndexMap.get3 p smoothingGroup uv smoothIndexMap
             in
             if existingIdx > -1 then
-                addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx (existingIdx :: outIndices) outFaceIndices
+                addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx (existingIdx :: outIndices) outFaceIndices
 
             else
                 case SmoothNormals.get p smoothingGroup smoothNormals of
@@ -692,18 +657,9 @@ addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVert
                                             smoothingGroup
                                             remainingElementVertices
                                             pendingFaces
-                                            (Dict.insert p
-                                                -- (smoothingGroup, uv) is guaranteed unique here (lookup2 returned -1 above),
-                                                -- so we always prepend a fresh triple; never overwrite an existing entry.
-                                                (case Dict.get p vMap of
-                                                    Just outEntries ->
-                                                        smoothingGroup :: uv :: outIdx :: outEntries
-
-                                                    Nothing ->
-                                                        [ smoothingGroup, uv, outIdx ]
-                                                )
-                                                vMap
-                                            )
+                                            -- (smoothingGroup, uv) is guaranteed unique here (get2 returned -1 above),
+                                            -- so we always prepend a fresh triple; never overwrite an existing entry.
+                                            (IndexMap.insert3 p smoothingGroup uv outIdx smoothIndexMap)
                                             ({ position = Point3d.placeIn frame position
                                              , normal = Vector3d.placeIn frame normal
                                              , uv = uvCoord
@@ -715,13 +671,13 @@ addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup elementVert
                                             outFaceIndices
 
                                     Nothing ->
-                                        addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices
+                                        addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices
 
                             Nothing ->
-                                addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices
+                                addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices
 
                     Nothing ->
-                        addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces vMap outVertices outIdx outIndices outFaceIndices
+                        addSmoothTexturedFaces frame vertexData smoothNormals smoothingGroup remainingElementVertices pendingFaces smoothIndexMap outVertices outIdx outIndices outFaceIndices
 
 
 {-| Flat normal generation: combined vertex- and face-level loop for non-textured faces.

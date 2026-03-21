@@ -1,8 +1,6 @@
 module Obj.Internal.MeshHelpers exposing
     ( buildMeshResult
     , groupIndices
-    , lookup1
-    , lookup2
     )
 
 import Array exposing (Array)
@@ -43,35 +41,3 @@ groupIndices p1 indices outFaceIndices =
 
         [] ->
             outFaceIndices
-
-
-{-| returns -1 if not found
--}
-lookup1 : Int -> List Int -> Int
-lookup1 idx1 list =
-    case list of
-        i1 :: result :: rest ->
-            if idx1 - i1 == 0 then
-                result
-
-            else
-                lookup1 idx1 rest
-
-        _ ->
-            -1
-
-
-{-| returns -1 if not found
--}
-lookup2 : Int -> Int -> List Int -> Int
-lookup2 idx1 idx2 list =
-    case list of
-        i1 :: i2 :: result :: rest ->
-            if idx1 - i1 == 0 && idx2 - i2 == 0 then
-                result
-
-            else
-                lookup2 idx1 idx2 rest
-
-        _ ->
-            -1
