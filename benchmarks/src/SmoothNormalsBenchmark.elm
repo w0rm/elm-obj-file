@@ -4,11 +4,12 @@ module SmoothNormalsBenchmark exposing (main)
 
 The Dict is keyed by position index; the Array is indexed directly by position.
 The question is whether the O(1) array access beats the O(log n) dict access
-enough to justify pre-allocating an array sized to *all* positions, even when
+enough to justify pre-allocating an array sized to _all_ positions, even when
 smooth groups only cover a fraction of them.
 
 Two scenarios are tested:
-  - dense:  all 1 000 positions are in a smooth group
+
+  - dense: all 1 000 positions are in a smooth group
   - sparse: only 200 out of 5 000 positions are in a smooth group
 
 Each scenario measures a full build-then-lookup cycle.
