@@ -9726,42 +9726,11 @@ var $author$project$Obj$Internal$Faces$addFlatFaces = F9(
 			}
 		}
 	});
-var $elm$core$Dict$get = F2(
-	function (targetKey, dict) {
-		get:
-		while (true) {
-			if (dict.$ === -2) {
-				return $elm$core$Maybe$Nothing;
-			} else {
-				var key = dict.b;
-				var value = dict.c;
-				var left = dict.d;
-				var right = dict.e;
-				var _v1 = A2($elm$core$Basics$compare, targetKey, key);
-				switch (_v1) {
-					case 0:
-						var $temp$targetKey = targetKey,
-							$temp$dict = left;
-						targetKey = $temp$targetKey;
-						dict = $temp$dict;
-						continue get;
-					case 1:
-						return $elm$core$Maybe$Just(value);
-					default:
-						var $temp$targetKey = targetKey,
-							$temp$dict = right;
-						targetKey = $temp$targetKey;
-						dict = $temp$dict;
-						continue get;
-				}
-			}
-		}
-	});
 var $author$project$Obj$Internal$SmoothNormals$get = F3(
 	function (p, smoothingGroup, _v0) {
 		var lookup = _v0.a;
-		var dict = _v0.b;
-		var _v1 = A2($elm$core$Dict$get, p, dict);
+		var arr = _v0.b;
+		var _v1 = A2($elm$core$Array$get, p, arr);
 		if (_v1.$ === 1) {
 			return $elm$core$Maybe$Nothing;
 		} else {
@@ -10025,10 +9994,10 @@ var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsVertices = F4
 					$temp$normal = normal,
 					$temp$elementVertices = remainingElementVertices,
 					$temp$outSmoothNormals = A3(
-					$elm$core$Dict$insert,
+					$elm$core$Array$set,
 					p,
 					function () {
-						var _v1 = A2($elm$core$Dict$get, p, outSmoothNormals);
+						var _v1 = A2($elm$core$Array$get, p, outSmoothNormals);
 						if (!_v1.$) {
 							var entries = _v1.a;
 							return A4($author$project$Obj$Internal$SmoothNormals$addNormal, smoothingGroup, normal, entries, _List_Nil);
@@ -10057,13 +10026,13 @@ var $ianmackenzie$elm_geometry$Vector3d$unitless = F3(
 		return {eP: x, eS: y, eV: z};
 	});
 var $author$project$Obj$Internal$SmoothNormals$polygonFanNormal = F5(
-	function (vertexData, p0, prevPos, elementVertices, normal) {
+	function (positions, p0, prevPos, elementVertices, normal) {
 		polygonFanNormal:
 		while (true) {
 			if (elementVertices.b) {
 				var vB = elementVertices.a;
 				var remainingElementVertices = elementVertices.b;
-				var _v1 = A2($elm$core$Array$get, vB.ee, vertexData.ek);
+				var _v1 = A2($elm$core$Array$get, vB.ee, positions);
 				if (!_v1.$) {
 					var posB = _v1.a;
 					var pB = $ianmackenzie$elm_geometry$Point3d$toMeters(posB);
@@ -10073,7 +10042,7 @@ var $author$project$Obj$Internal$SmoothNormals$polygonFanNormal = F5(
 					var az = prevPos.eV - p0.eV;
 					var ay = prevPos.eS - p0.eS;
 					var ax = prevPos.eP - p0.eP;
-					var $temp$vertexData = vertexData,
+					var $temp$positions = positions,
 						$temp$p0 = p0,
 						$temp$prevPos = pB,
 						$temp$elementVertices = remainingElementVertices,
@@ -10081,19 +10050,19 @@ var $author$project$Obj$Internal$SmoothNormals$polygonFanNormal = F5(
 						$ianmackenzie$elm_geometry$Vector3d$plus,
 						normal,
 						A3($ianmackenzie$elm_geometry$Vector3d$unitless, (by * az) - (bz * ay), (bz * ax) - (bx * az), (bx * ay) - (by * ax)));
-					vertexData = $temp$vertexData;
+					positions = $temp$positions;
 					p0 = $temp$p0;
 					prevPos = $temp$prevPos;
 					elementVertices = $temp$elementVertices;
 					normal = $temp$normal;
 					continue polygonFanNormal;
 				} else {
-					var $temp$vertexData = vertexData,
+					var $temp$positions = positions,
 						$temp$p0 = p0,
 						$temp$prevPos = prevPos,
 						$temp$elementVertices = remainingElementVertices,
 						$temp$normal = normal;
-					vertexData = $temp$vertexData;
+					positions = $temp$positions;
 					p0 = $temp$p0;
 					prevPos = $temp$prevPos;
 					elementVertices = $temp$elementVertices;
@@ -10106,7 +10075,7 @@ var $author$project$Obj$Internal$SmoothNormals$polygonFanNormal = F5(
 		}
 	});
 var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsFaces = F4(
-	function (vertexData, smoothingGroup, faceElements, outSmoothNormals) {
+	function (positions, smoothingGroup, faceElements, outSmoothNormals) {
 		collectSmoothNormalsFaces:
 		while (true) {
 			if (!faceElements.b) {
@@ -10120,45 +10089,45 @@ var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsFaces = F4(
 					var v1 = _v2.a;
 					var remainingElementVertices = _v2.b;
 					var remainingFaceElements = faceElements.b;
-					var _v3 = A2($elm$core$Array$get, v0.ee, vertexData.ek);
+					var _v3 = A2($elm$core$Array$get, v0.ee, positions);
 					if (!_v3.$) {
 						var pos0 = _v3.a;
-						var _v4 = A2($elm$core$Array$get, v1.ee, vertexData.ek);
+						var _v4 = A2($elm$core$Array$get, v1.ee, positions);
 						if (!_v4.$) {
 							var pos1 = _v4.a;
 							var normal = A5(
 								$author$project$Obj$Internal$SmoothNormals$polygonFanNormal,
-								vertexData,
+								positions,
 								$ianmackenzie$elm_geometry$Point3d$toMeters(pos0),
 								$ianmackenzie$elm_geometry$Point3d$toMeters(pos1),
 								remainingElementVertices,
 								$ianmackenzie$elm_geometry$Vector3d$zero);
-							var $temp$vertexData = vertexData,
+							var $temp$positions = positions,
 								$temp$smoothingGroup = smoothingGroup,
 								$temp$faceElements = remainingFaceElements,
 								$temp$outSmoothNormals = A4($author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsVertices, smoothingGroup, normal, elementVertices, outSmoothNormals);
-							vertexData = $temp$vertexData;
+							positions = $temp$positions;
 							smoothingGroup = $temp$smoothingGroup;
 							faceElements = $temp$faceElements;
 							outSmoothNormals = $temp$outSmoothNormals;
 							continue collectSmoothNormalsFaces;
 						} else {
-							var $temp$vertexData = vertexData,
+							var $temp$positions = positions,
 								$temp$smoothingGroup = smoothingGroup,
 								$temp$faceElements = remainingFaceElements,
 								$temp$outSmoothNormals = outSmoothNormals;
-							vertexData = $temp$vertexData;
+							positions = $temp$positions;
 							smoothingGroup = $temp$smoothingGroup;
 							faceElements = $temp$faceElements;
 							outSmoothNormals = $temp$outSmoothNormals;
 							continue collectSmoothNormalsFaces;
 						}
 					} else {
-						var $temp$vertexData = vertexData,
+						var $temp$positions = positions,
 							$temp$smoothingGroup = smoothingGroup,
 							$temp$faceElements = remainingFaceElements,
 							$temp$outSmoothNormals = outSmoothNormals;
-						vertexData = $temp$vertexData;
+						positions = $temp$positions;
 						smoothingGroup = $temp$smoothingGroup;
 						faceElements = $temp$faceElements;
 						outSmoothNormals = $temp$outSmoothNormals;
@@ -10167,11 +10136,11 @@ var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsFaces = F4(
 				} else {
 					var _v5 = faceElements.a;
 					var remainingFaceElements = faceElements.b;
-					var $temp$vertexData = vertexData,
+					var $temp$positions = positions,
 						$temp$smoothingGroup = smoothingGroup,
 						$temp$faceElements = remainingFaceElements,
 						$temp$outSmoothNormals = outSmoothNormals;
-					vertexData = $temp$vertexData;
+					positions = $temp$positions;
 					smoothingGroup = $temp$smoothingGroup;
 					faceElements = $temp$faceElements;
 					outSmoothNormals = $temp$outSmoothNormals;
@@ -10181,7 +10150,7 @@ var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsFaces = F4(
 		}
 	});
 var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsHelp = F4(
-	function (matches, vertexData, groups, outSmoothNormals) {
+	function (matches, positions, groups, outSmoothNormals) {
 		collectSmoothNormalsHelp:
 		while (true) {
 			if (!groups.b) {
@@ -10193,21 +10162,21 @@ var $author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsHelp = F4(
 				var remainingGroups = groups.b;
 				if (matches(smoothingGroup)) {
 					var $temp$matches = matches,
-						$temp$vertexData = vertexData,
+						$temp$positions = positions,
 						$temp$groups = remainingGroups,
-						$temp$outSmoothNormals = A4($author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsFaces, vertexData, smoothingGroup, faceElements, outSmoothNormals);
+						$temp$outSmoothNormals = A4($author$project$Obj$Internal$SmoothNormals$collectSmoothNormalsFaces, positions, smoothingGroup, faceElements, outSmoothNormals);
 					matches = $temp$matches;
-					vertexData = $temp$vertexData;
+					positions = $temp$positions;
 					groups = $temp$groups;
 					outSmoothNormals = $temp$outSmoothNormals;
 					continue collectSmoothNormalsHelp;
 				} else {
 					var $temp$matches = matches,
-						$temp$vertexData = vertexData,
+						$temp$positions = positions,
 						$temp$groups = remainingGroups,
 						$temp$outSmoothNormals = outSmoothNormals;
 					matches = $temp$matches;
-					vertexData = $temp$vertexData;
+					positions = $temp$positions;
 					groups = $temp$groups;
 					outSmoothNormals = $temp$outSmoothNormals;
 					continue collectSmoothNormalsHelp;
@@ -10283,7 +10252,7 @@ var $author$project$Obj$Internal$SmoothNormals$smoothingGroupsHelp = F2(
 		}
 	});
 var $author$project$Obj$Internal$SmoothNormals$bitflag = F2(
-	function (vertexData, groups) {
+	function (positions, groups) {
 		var allBits = A3(
 			$elm$core$List$foldl,
 			$elm$core$Bitwise$or,
@@ -10297,9 +10266,12 @@ var $author$project$Obj$Internal$SmoothNormals$bitflag = F2(
 				function (smoothingGroup) {
 					return !(!(smoothingGroup & allBits));
 				},
-				vertexData,
+				positions,
 				groups,
-				$elm$core$Dict$empty));
+				A2(
+					$elm$core$Array$repeat,
+					$elm$core$Array$length(positions),
+					_List_Nil)));
 	});
 var $ianmackenzie$elm_triangular_mesh$TriangularMesh$TriangularMesh = $elm$core$Basics$identity;
 var $elm$core$Basics$not = _Basics_not;
@@ -10385,6 +10357,37 @@ var $author$project$Obj$Internal$SmoothNormals$getExact = F3(
 			}
 		}
 	});
+var $elm$core$Dict$get = F2(
+	function (targetKey, dict) {
+		get:
+		while (true) {
+			if (dict.$ === -2) {
+				return $elm$core$Maybe$Nothing;
+			} else {
+				var key = dict.b;
+				var value = dict.c;
+				var left = dict.d;
+				var right = dict.e;
+				var _v1 = A2($elm$core$Basics$compare, targetKey, key);
+				switch (_v1) {
+					case 0:
+						var $temp$targetKey = targetKey,
+							$temp$dict = left;
+						targetKey = $temp$targetKey;
+						dict = $temp$dict;
+						continue get;
+					case 1:
+						return $elm$core$Maybe$Just(value);
+					default:
+						var $temp$targetKey = targetKey,
+							$temp$dict = right;
+						targetKey = $temp$targetKey;
+						dict = $temp$dict;
+						continue get;
+				}
+			}
+		}
+	});
 var $elm$core$Dict$member = F2(
 	function (key, dict) {
 		var _v0 = A2($elm$core$Dict$get, key, dict);
@@ -10400,7 +10403,7 @@ var $elm$core$Set$member = F2(
 		return A2($elm$core$Dict$member, key, dict);
 	});
 var $author$project$Obj$Internal$SmoothNormals$exact = F2(
-	function (vertexData, groups) {
+	function (positions, groups) {
 		var smoothingGroupsSet = $elm$core$Set$fromList(
 			A2($author$project$Obj$Internal$SmoothNormals$smoothingGroupsHelp, groups, _List_Nil));
 		return A2(
@@ -10411,9 +10414,12 @@ var $author$project$Obj$Internal$SmoothNormals$exact = F2(
 				function (smoothingGroup) {
 					return A2($elm$core$Set$member, smoothingGroup, smoothingGroupsSet);
 				},
-				vertexData,
+				positions,
 				groups,
-				$elm$core$Dict$empty));
+				A2(
+					$elm$core$Array$repeat,
+					$elm$core$Array$length(positions),
+					_List_Nil)));
 	});
 var $author$project$Obj$Internal$IndexMap$init2 = function (_v0) {
 	var arr = _v0;
@@ -10537,7 +10543,7 @@ var $author$project$Obj$Internal$Faces$faces = F5(
 						var _v5 = _v4.b;
 						var elementVertices = _v5.c;
 						var remainingSmoothPendingFaces = smoothPendingFaces.b;
-						var smoothNormals = bitflags ? A2($author$project$Obj$Internal$SmoothNormals$bitflag, vertexData, filteredGroups) : A2($author$project$Obj$Internal$SmoothNormals$exact, vertexData, filteredGroups);
+						var smoothNormals = bitflags ? A2($author$project$Obj$Internal$SmoothNormals$bitflag, vertexData.ek, filteredGroups) : A2($author$project$Obj$Internal$SmoothNormals$exact, vertexData.ek, filteredGroups);
 						return $author$project$Obj$Internal$Faces$addSmoothFaces(frame)(vertexData)(smoothNormals)(smoothingGroup)(elementVertices)(remainingSmoothPendingFaces)(
 							$author$project$Obj$Internal$IndexMap$init2(vertexData.a9))(faceVertices)(maxIndex + 1)(_List_Nil)(faceIndices);
 					}
@@ -11804,7 +11810,7 @@ var $author$project$Obj$Internal$Faces$texturedFaces = F5(
 						var _v5 = _v4.b;
 						var elementVertices = _v5.c;
 						var remainingSmoothPendingFaces = smoothPendingFaces.b;
-						var smoothNormals = bitflags ? A2($author$project$Obj$Internal$SmoothNormals$bitflag, vertexData, filteredGroups) : A2($author$project$Obj$Internal$SmoothNormals$exact, vertexData, filteredGroups);
+						var smoothNormals = bitflags ? A2($author$project$Obj$Internal$SmoothNormals$bitflag, vertexData.ek, filteredGroups) : A2($author$project$Obj$Internal$SmoothNormals$exact, vertexData.ek, filteredGroups);
 						return $author$project$Obj$Internal$Faces$addSmoothTexturedFaces(frame)(vertexData)(smoothNormals)(smoothingGroup)(elementVertices)(remainingSmoothPendingFaces)(
 							$author$project$Obj$Internal$IndexMap$init3(vertexData.a9))(faceVertices)(maxIndex + 1)(_List_Nil)(faceIndices);
 					}
