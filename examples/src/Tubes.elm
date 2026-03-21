@@ -378,7 +378,7 @@ tubes svgPath =
                             }
                         )
             in
-            tube :: endCap 0 :: endCap 1 :: result
+            tube :: endCap 0 :: endCap length :: result
     in
     svgPath
         |> svgParsePath
